@@ -490,7 +490,7 @@ function ingestSIPX(j, isSeed){
   SIPXnow = cur?cur.p:null;
   renderCore();
   renderSIPX();
-  if(!isSeed && typeof loadForecast==="function") loadForecast(); // prekalibriraj napoved z živimi cenami
+  if(!isSeed && typeof computeForecast==="function") computeForecast(); // prekalibriraj z živimi cenami, brez novega klica na vreme
 }
 function ingestPaste(){
   const ta=document.getElementById("sipxPaste");
@@ -622,51 +622,57 @@ function r2(X,y,beta){
   for(let i=0;i<X.length;i++){ const pr=X[i].reduce((a,v,j)=>a+v*beta[j],0); ss+=(y[i]-pr)**2; st+=(y[i]-yb)**2; }
   return st? 1-ss/st : 0;
 }
-async function loadForecast(){
+let WEATHER=null;
+async function loadForecast(force){
   const fc=document.getElementById("fc");
   if(!fc.querySelector(".fcd")) fc.innerHTML='<div class="ld">Nalagam vreme in računam napoved…</div>';
-  try{
-    const reqs=ZONES.map(z=>tryFetchJSON(
-      `https://api.open-meteo.com/v1/forecast?latitude=${z.lat}&longitude=${z.lon}`+
-      `&hourly=temperature_2m,wind_speed_100m,shortwave_radiation&past_days=5&forecast_days=6&timezone=Europe%2FLjubljana`));
-    const rs=await Promise.all(reqs);
-    const bad=rs.find(r=>!r.data); if(bad) throw new Error(bad.err||"napaka pri vremenu");
-    const res=rs.map(r=>r.data), time=res[0].hourly.time;
-    // urne značilke
-    const feat=[];
-    for(let i=0;i<time.length;i++){
-      let wind=0,solar=0,tmean=0;
-      ZONES.forEach((z,zi)=>{ const h=res[zi].hourly;
-        wind+=z.w*(h.wind_speed_100m[i]||0);
-        solar+=z.w*(h.shortwave_radiation[i]||0);
-        tmean+=z.w*(h.temperature_2m[i]!=null?h.temperature_2m[i]:15);
-      });
-      const hr=parseInt(time[i].slice(11,13),10);
-      const dev=Math.max(0,15.5-tmean)+0.7*Math.max(0,tmean-24);
-      const demand=LOAD[hr]*(1+0.05*dev);
-      feat.push({t:time[i],date:time[i].slice(0,10),hr,wind,solar,demand});
-    }
-    // dejanske urne SIPX cene
-    const act={}; { const tmp={};
-      SIPXALL.forEach(x=>{ const k=`${x.t.getFullYear()}-${x.t.getMonth()+1}-${x.t.getDate()}-${x.t.getHours()}`; (tmp[k]=tmp[k]||[]).push(x.p); });
-      for(const k in tmp) act[k]=tmp[k].reduce((a,b)=>a+b,0)/tmp[k].length;
-    }
-    const keyOf=f=>{ const [Y,M,D]=f.date.split("-").map(Number); return `${Y}-${M}-${D}-${f.hr}`; };
-    const X=[],Y=[];
-    feat.forEach(f=>{ const p=act[keyOf(f)]; if(p!=null){ X.push([1,f.wind,f.solar,f.demand]); Y.push(p); } });
-    let beta=null,fit=null;
-    if(X.length>=8){ beta=ols(X,Y); if(beta) fit=r2(X,Y,beta); }
-    feat.forEach(f=>{ const a=act[keyOf(f)];
-      f.actual=a!=null?a:null;
-      f.pred=beta?(beta[0]+beta[1]*f.wind+beta[2]*f.solar+beta[3]*f.demand):null;
-    });
-    renderForecast(feat,beta,fit,X.length);
-  }catch(e){
-    const blocked=/Failed to fetch|NetworkError|load failed|napaka/i.test(e.message);
-    fc.innerHTML=`<div class="err">Napoved ni dosegljiva (${e.message}).`+
-      (blocked?` Verjetno blokada zunanjih klicev v predogledu; deluje na GitHub Pages.`:``)+
-      ` <button class="tab" onclick="loadForecast()">Poskusi znova</button></div>`;
+  if(WEATHER && !force){ computeForecast(); return; } // vreme je v predpomnilniku -> samo preračunaj
+  // VSE lokacije v ENEM zahtevku (manj klicev -> brez 429)
+  const lats=ZONES.map(z=>z.lat).join(","), lons=ZONES.map(z=>z.lon).join(",");
+  const r=await tryFetchJSON(`https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}`+
+    `&hourly=temperature_2m,wind_speed_100m,shortwave_radiation&past_days=5&forecast_days=6&timezone=Europe%2FLjubljana`);
+  if(!r.data){
+    const rate=/429/.test(r.err||""), blocked=/Failed to fetch|NetworkError|load failed/i.test(r.err||"");
+    fc.innerHTML=`<div class="err">Napoved ni dosegljiva (${r.err}).`+
+      (rate?` Preveč zahtevkov na Open-Meteo; samodejni ponovni poskus čez 45 s.`:
+       blocked?` Verjetno blokada zunanjih klicev v predogledu; deluje na GitHub Pages. <button class="tab" onclick="loadForecast(true)">Poskusi znova</button>`:
+       ` <button class="tab" onclick="loadForecast(true)">Poskusi znova</button>`)+`</div>`;
+    if(rate) setTimeout(()=>loadForecast(true),45000);
+    return;
   }
+  WEATHER = Array.isArray(r.data)? r.data : [r.data];
+  computeForecast();
+}
+function computeForecast(){
+  if(!WEATHER) return;
+  const res=WEATHER, time=res[0].hourly.time;
+  const feat=[];
+  for(let i=0;i<time.length;i++){
+    let wind=0,solar=0,tmean=0;
+    ZONES.forEach((z,zi)=>{ const h=res[zi].hourly;
+      wind+=z.w*(h.wind_speed_100m[i]||0);
+      solar+=z.w*(h.shortwave_radiation[i]||0);
+      tmean+=z.w*(h.temperature_2m[i]!=null?h.temperature_2m[i]:15);
+    });
+    const hr=parseInt(time[i].slice(11,13),10);
+    const dev=Math.max(0,15.5-tmean)+0.7*Math.max(0,tmean-24);
+    const demand=LOAD[hr]*(1+0.05*dev);
+    feat.push({t:time[i],date:time[i].slice(0,10),hr,wind,solar,demand});
+  }
+  const act={}; { const tmp={};
+    SIPXALL.forEach(x=>{ const k=`${x.t.getFullYear()}-${x.t.getMonth()+1}-${x.t.getDate()}-${x.t.getHours()}`; (tmp[k]=tmp[k]||[]).push(x.p); });
+    for(const k in tmp) act[k]=tmp[k].reduce((a,b)=>a+b,0)/tmp[k].length;
+  }
+  const keyOf=f=>{ const [Y,M,D]=f.date.split("-").map(Number); return `${Y}-${M}-${D}-${f.hr}`; };
+  const X=[],Y=[];
+  feat.forEach(f=>{ const p=act[keyOf(f)]; if(p!=null){ X.push([1,f.wind,f.solar,f.demand]); Y.push(p); } });
+  let beta=null,fit=null;
+  if(X.length>=8){ beta=ols(X,Y); if(beta) fit=r2(X,Y,beta); }
+  feat.forEach(f=>{ const a=act[keyOf(f)];
+    f.actual=a!=null?a:null;
+    f.pred=beta?(beta[0]+beta[1]*f.wind+beta[2]*f.solar+beta[3]*f.demand):null;
+  });
+  renderForecast(feat,beta,fit,X.length);
 }
 function fcMiniSVG(rows,lo,hi,nowHr){
   const W=240,H=72,pl=2,prr=2,pt=5,pb=12,iw=W-pl-prr,ih=H-pt-pb,rng=(hi-lo)||1,bw=iw/24;

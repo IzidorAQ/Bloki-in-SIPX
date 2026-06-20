@@ -220,16 +220,16 @@ const COL = {1:"#e5484d",2:"#f2820a",3:"#f5c518",4:"#7cc34a",5:"#2fa84f"};
 const DARKTXT = {3:true,4:true}; // bloki s svetlim ozadjem -> temno besedilo na disku
 
 /* ----- ČASOVNI BLOKI OD 1.1.2027 -----
-   Vsak vnos: [začetna ura, končna ura, blok].
-   POTRJENO: višja sezona, delovni dan (vir: Akt / objave Agencije).
-   OCENA: ostali tipi dneva (uradna grafika nižje sezone se lahko razlikuje - preveri).            */
+   Vir: Akt o spremembah in dopolnitvah Akta o metodologiji za obračunavanje omrežnine
+   (Uradni list RS, št. 76/25, Priloga 2, 3. poglavje). Vse štiri vrste dneva so URADNE.
+   Vsak vnos: [začetna ura, končna ura, blok].                                              */
 const SCHED = {
-  "visoka|delovni": [[0,6,3],[6,12,1],[12,17,2],[17,20,1],[20,22,2],[22,24,3]],   // potrjeno
-  "visoka|prost":   [[0,6,4],[6,22,3],[22,24,4]],                                  // ocena (samo bloka 3 in 4)
-  "nizka|delovni":  [[0,6,5],[6,12,3],[12,17,4],[17,20,3],[20,22,4],[22,24,5]],    // ocena (bloki 3,4,5)
-  "nizka|prost":    [[0,6,5],[6,22,4],[22,24,5]]                                   // ocena (samo bloka 4 in 5)
+  "visoka|delovni": [[0,6,3],[6,12,1],[12,17,2],[17,20,1],[20,22,2],[22,24,3]],
+  "visoka|prost":   [[0,6,4],[6,12,3],[12,17,4],[17,22,3],[22,24,4]],
+  "nizka|delovni":  [[0,6,5],[6,12,3],[12,17,4],[17,22,3],[22,24,5]],
+  "nizka|prost":    [[0,6,5],[6,12,4],[12,17,5],[17,22,4],[22,24,5]]
 };
-const CONFIRMED = {"visoka|delovni":true,"visoka|prost":false,"nizka|delovni":false,"nizka|prost":false};
+const CONFIRMED = {"visoka|delovni":true,"visoka|prost":true,"nizka|delovni":true,"nizka|prost":true};
 
 /* ============================================================
    ČAS / SEZONA / DAN
@@ -297,7 +297,7 @@ function renderCore(){
   document.getElementById("chips").innerHTML=
     `<span class="chip">moč <b>${moc.toFixed(5)} €/kW/mes</b>${disc1?` <span style="color:var(--b4)">(${Math.round(b1Mult(d)*100)} %)</span>`:""}</span>`+
     `<span class="chip">energija <b>${TARIFF[b].en.toFixed(5)} €/kWh</b></span>`+
-    `<span class="chip">${CONFIRMED[sez+"|"+dt]?"urnik potrjen":"urnik ocena"}</span>`;
+    `<span class="chip">${CONFIRMED[sez+"|"+dt]?"urnik: Ur. l. 76/25":"urnik ocena"}</span>`;
   // next change
   const h=d.getHours()+d.getMinutes()/60; let nb=null,nh=null;
   for(const [s,e,bl] of schedFor(d)) if(s>h){ nb=bl; nh=s; break; }
@@ -345,11 +345,11 @@ function renderCore(){
 }
 function blockWhere(i){
   const m={
-    1:"višja sezona, delovni dan (konice 6-12 in 17-20)",
-    2:"višja sezona, delovni dan (12-17, 20-22)",
-    3:"višja sezona (noč + vikend dan), nižja sezona delovni dan",
-    4:"višja sezona vikend (noč), nižja sezona (12-17, vikend dan)",
-    5:"nižja sezona, noč in vikend"
+    1:"višja sezona, delovni dan: konici 6-12 in 17-20",
+    2:"višja sezona, delovni dan: 12-17 in 20-22",
+    3:"VS delovni: noč (0-6, 22-24) | VS vikend in NS delovni: konici 6-12 in 17-22",
+    4:"VS vikend: noč in 12-17 | NS delovni: 12-17 | NS vikend: konici 6-12 in 17-22",
+    5:"nižja sezona: noč (0-6, 22-24); NS delovni in NS vikend opoldne (12-17)"
   };
   return m[i];
 }

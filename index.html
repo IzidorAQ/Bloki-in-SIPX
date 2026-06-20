@@ -384,32 +384,49 @@ function card(lab,v,u,total){
    SIPX DAY-AHEAD  (api.energy-charts.info, cona SI)
    ============================================================ */
 let SIPX={};   // 'YYYY-MM-DD' -> [{h, p}]
+async function tryFetchJSON(url){
+  const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),12000);
+  try{
+    const r=await fetch(url,{signal:ctrl.signal,mode:"cors"});
+    clearTimeout(t);
+    if(!r.ok) return {err:"HTTP "+r.status};
+    return {data:await r.json()};
+  }catch(e){ clearTimeout(t); return {err:e.name==="AbortError"?"časovna omejitev":e.message}; }
+}
 async function loadSIPX(){
+  const box=document.getElementById("sipxChart");
+  box.innerHTML='<div class="ld">Nalagam SIPX…</div>';
   const d=nowLjubljana();
   const fmt=x=>x.toISOString().slice(0,10);
   const start=new Date(d); start.setDate(d.getDate()-1);
-  const end=new Date(d);   end.setDate(d.getDate()+1);
-  const url=`https://api.energy-charts.info/price?bzn=SI&start=${fmt(start)}&end=${fmt(end)}`;
-  try{
-    const r=await fetch(url); if(!r.ok) throw new Error("HTTP "+r.status);
-    const j=await r.json();
-    const us=j.unix_seconds||[], pr=j.price||[];
-    SIPX={};
-    for(let i=0;i<us.length;i++){
-      if(pr[i]==null) continue;
-      const dt=new Date(new Date(us[i]*1000).toLocaleString("en-US",{timeZone:"Europe/Ljubljana"}));
-      const key=`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
-      (SIPX[key]=SIPX[key]||[]).push({h:dt.getHours(),p:pr[i]});
-    }
-    // trenutna ura
-    const tk=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-    const cur=(SIPX[tk]||[]).find(x=>x.h===d.getHours());
-    SIPXnow = cur?cur.p:null;
-    renderCore();
-    renderSIPX();
-  }catch(e){
-    document.getElementById("sipxChart").innerHTML=`<div class="err">SIPX ni dosegljiv: ${e.message}. Vir: api.energy-charts.info (cona SI). Poskusi osvežiti.</div>`;
+  const end=new Date(d);   end.setDate(d.getDate()+2);
+  const urls=[
+    `https://api.energy-charts.info/price?bzn=SI&start=${fmt(start)}&end=${fmt(end)}`,
+    `https://api.energy-charts.info/price?bzn=SI`
+  ];
+  let res=null, lastErr="";
+  for(const u of urls){ const r=await tryFetchJSON(u); if(r.data){res=r.data;break;} lastErr=r.err; }
+  if(!res){
+    const blocked=/Failed to fetch|NetworkError|load failed/i.test(lastErr);
+    box.innerHTML=`<div class="err">SIPX ni dosegljiv (${lastErr}).`+
+      (blocked?` To je skoraj zagotovo blokada zunanjih klicev v predogledu (peskovnik). Odpri datoteko na GitHub Pages ali lokalno in deluje. `:` `)+
+      `<br><br><button class="tab" onclick="loadSIPX()">Poskusi znova</button> `+
+      `<a class="tab" style="text-decoration:none" target="_blank" href="${urls[0]}">Odpri vir &#8599;</a></div>`;
+    return;
   }
+  const us=res.unix_seconds||[], pr=res.price||[];
+  SIPX={};
+  for(let i=0;i<us.length;i++){
+    if(pr[i]==null) continue;
+    const dt=new Date(new Date(us[i]*1000).toLocaleString("en-US",{timeZone:"Europe/Ljubljana"}));
+    const key=`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
+    (SIPX[key]=SIPX[key]||[]).push({h:dt.getHours(),p:pr[i]});
+  }
+  const tk=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  const cur=(SIPX[tk]||[]).find(x=>x.h===d.getHours());
+  SIPXnow = cur?cur.p:null;
+  renderCore();
+  renderSIPX();
 }
 let sipxTab=null;
 function renderSIPX(){
@@ -513,7 +530,10 @@ async function loadForecast(){
     });
     renderForecast(out, base);
   }catch(e){
-    document.getElementById("fc").innerHTML=`<div class="err">Vremenska napoved ni dosegljiva: ${e.message}</div>`;
+    const blocked=/Failed to fetch|NetworkError|load failed/i.test(e.message);
+    document.getElementById("fc").innerHTML=`<div class="err">Vremenska napoved ni dosegljiva (${e.message}).`+
+      (blocked?` Verjetno blokada zunanjih klicev v predogledu; deluje na GitHub Pages ali lokalno.`:``)+
+      ` <button class="tab" onclick="loadForecast()">Poskusi znova</button></div>`;
   }
 }
 function renderForecast(out, base){

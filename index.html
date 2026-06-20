@@ -97,6 +97,19 @@
   .tab.on{background:var(--energy);color:#06201d;border-color:var(--energy);font-weight:700}
   .tab[disabled]{opacity:.4;cursor:not-allowed}
 
+  /* SIPX 15-min list */
+  .sipxlist{margin-top:14px;max-height:360px;overflow-y:auto;border:1px solid var(--line);border-radius:10px;
+    padding:4px;background:#0f141b}
+  .sipxlist::-webkit-scrollbar{width:8px}
+  .sipxlist::-webkit-scrollbar-thumb{background:#2a3340;border-radius:4px}
+  .srow{display:grid;grid-template-columns:62px 64px 1fr;gap:10px;align-items:center;padding:5px 8px;border-radius:7px}
+  .srow.now{background:#202a36}
+  .srow .stime{font-family:var(--mono);font-size:12px;color:var(--mut)}
+  .srow.now .stime{color:#fff;font-weight:700}
+  .srow .sprice{font-family:var(--mono);font-size:13px;font-weight:700;text-align:right}
+  .srow .sbarwrap{height:18px;display:flex;align-items:center}
+  .srow .sbar{height:14px;border-radius:7px;min-width:3px}
+
   /* forecast */
   .fc{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
   .fcd{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center}
@@ -178,10 +191,10 @@
 
     <!-- SIPX -->
     <section class="panel">
-      <h2>SIPX day-ahead &middot; borzna cena energije</h2>
-      <div class="tabs" id="sipxTabs"></div>
+      <h2>SIPX day-ahead &middot; borzna cena energije <span id="sipxRange" style="color:var(--faint);font-family:var(--mono);font-size:11px"></span></h2>
       <div class="stats" id="sipxStats"></div>
       <div class="barwrap" id="sipxChart"><div class="ld">Nalagam…</div></div>
+      <div id="sipxList" class="sipxlist"></div>
       <details style="margin-top:12px">
         <summary style="cursor:pointer;color:var(--mut);font-size:12px;font-family:var(--mono)">Ročni vnos podatkov (če samodejni klic ne uspe)</summary>
         <div class="note" style="margin-top:8px">Odpri <span style="color:var(--energy)">api.energy-charts.info/price?bzn=SI</span>, kopiraj celoten JSON in ga prilepi sem:</div>
@@ -389,7 +402,9 @@ function card(lab,v,u,total){
 /* ============================================================
    SIPX DAY-AHEAD  (api.energy-charts.info, cona SI)
    ============================================================ */
-let SIPX={};   // 'YYYY-MM-DD' -> [{h, p}]
+const SEED_SIPX = {"unix_seconds":[1781820000,1781820900,1781821800,1781822700,1781823600,1781824500,1781825400,1781826300,1781827200,1781828100,1781829000,1781829900,1781830800,1781831700,1781832600,1781833500,1781834400,1781835300,1781836200,1781837100,1781838000,1781838900,1781839800,1781840700,1781841600,1781842500,1781843400,1781844300,1781845200,1781846100,1781847000,1781847900,1781848800,1781849700,1781850600,1781851500,1781852400,1781853300,1781854200,1781855100,1781856000,1781856900,1781857800,1781858700,1781859600,1781860500,1781861400,1781862300,1781863200,1781864100,1781865000,1781865900,1781866800,1781867700,1781868600,1781869500,1781870400,1781871300,1781872200,1781873100,1781874000,1781874900,1781875800,1781876700,1781877600,1781878500,1781879400,1781880300,1781881200,1781882100,1781883000,1781883900,1781884800,1781885700,1781886600,1781887500,1781888400,1781889300,1781890200,1781891100,1781892000,1781892900,1781893800,1781894700,1781895600,1781896500,1781897400,1781898300,1781899200,1781900100,1781901000,1781901900,1781902800,1781903700,1781904600,1781905500,1781906400,1781907300,1781908200,1781909100,1781910000,1781910900,1781911800,1781912700,1781913600,1781914500,1781915400,1781916300,1781917200,1781918100,1781919000,1781919900,1781920800,1781921700,1781922600,1781923500,1781924400,1781925300,1781926200,1781927100,1781928000,1781928900,1781929800,1781930700,1781931600,1781932500,1781933400,1781934300,1781935200,1781936100,1781937000,1781937900,1781938800,1781939700,1781940600,1781941500,1781942400,1781943300,1781944200,1781945100,1781946000,1781946900,1781947800,1781948700,1781949600,1781950500,1781951400,1781952300,1781953200,1781954100,1781955000,1781955900,1781956800,1781957700,1781958600,1781959500,1781960400,1781961300,1781962200,1781963100,1781964000,1781964900,1781965800,1781966700,1781967600,1781968500,1781969400,1781970300,1781971200,1781972100,1781973000,1781973900,1781974800,1781975700,1781976600,1781977500,1781978400,1781979300,1781980200,1781981100,1781982000,1781982900,1781983800,1781984700,1781985600,1781986500,1781987400,1781988300,1781989200,1781990100,1781991000,1781991900,1781992800,1781993700,1781994600,1781995500,1781996400,1781997300,1781998200,1781999100,1782000000,1782000900,1782001800,1782002700,1782003600,1782004500,1782005400,1782006300,1782007200,1782008100,1782009000,1782009900,1782010800,1782011700,1782012600,1782013500,1782014400,1782015300,1782016200,1782017100,1782018000,1782018900,1782019800,1782020700,1782021600,1782022500,1782023400,1782024300,1782025200,1782026100,1782027000,1782027900,1782028800,1782029700,1782030600,1782031500,1782032400,1782033300,1782034200,1782035100,1782036000,1782036900,1782037800,1782038700,1782039600,1782040500,1782041400,1782042300,1782043200,1782044100,1782045000,1782045900,1782046800,1782047700,1782048600,1782049500,1782050400,1782051300,1782052200,1782053100,1782054000,1782054900,1782055800,1782056700,1782057600,1782058500,1782059400,1782060300,1782061200,1782062100,1782063000,1782063900,1782064800,1782065700,1782066600,1782067500,1782068400,1782069300,1782070200,1782071100,1782072000,1782072900,1782073800,1782074700,1782075600,1782076500,1782077400,1782078300],"price":[148.23,143.29,139.1,133.73,137.41,131.86,126.43,121.43,131.42,125.12,124.98,124.22,122.7,122.62,121.12,120.56,120.04,121.48,121.27,122,119.77,120.37,123.52,125.07,126.6,132.96,132.28,128.26,136.7,133.64,122.5,105.07,122.25,114.33,106.79,92.88,107.54,80.19,69.93,55.49,68.41,58.61,48.16,33.11,43.05,32.52,21.65,11,21.8,14.01,14.2,9.99,12.97,10.31,9.91,7.63,10.17,13.32,15.58,22.38,18.74,30.2,40.44,59.04,39.75,73.45,83.98,100.4,86.59,108.45,114.74,120.65,129.02,133.86,148.23,155,148.86,162.17,189.07,231.75,173.69,189.16,198.67,205.25,195.68,189.27,177.59,156.9,168.1,159.55,150.05,145.3,148.85,142.52,134.02,126.6,144.08,133.61,124.32,122,123.6,120.16,120.13,120.68,120.55,119.45,117.95,116.45,118.98,117.65,116.9,116,113.88,114.95,115.92,116.79,118.22,117.61,115.22,113.53,118.1,113.05,110.13,99.81,114.3,108.42,98.37,82.6,110.48,93.43,79.8,59.53,76.54,48.37,20.52,4.23,11.79,3.99,0.71,0.01,0,0,0,-0.01,-0.01,-0.01,-0.01,-0.02,-0.01,-0.02,-0.02,-0.02,-0.02,-0.01,-0.01,-0.01,0,0,0,1,0.15,5.11,16.18,53.81,14.43,91.76,115.16,132.22,102.93,119.82,131.49,157.09,130.01,149.51,163.58,192.07,154.29,158.55,168.7,184.59,175.71,170.73,176.08,168.09,177.48,158.81,154.71,145.34,160.2,152.81,143.67,134.21,147.39,139.06,134.05,131.95,133,130.78,128.74,126.9,130.78,127.08,127.32,127.29,126.33,128.03,127.13,128.14,126.42,126.78,124.75,126.5,129.72,124.47,124.12,119.42,124.43,114.83,109.93,97.02,113.72,110,93.94,74.3,100.16,72.11,45.07,21.26,7.27,2.84,0.06,0.42,4.1,1.31,0.04,0,0,0,0,-0.01,0.01,0.02,0.03,0.03,-0.01,-0.01,-0.01,-0.01,-0.01,-0.01,0,0,0,0,0,0.03,0.11,2.05,6.85,43.58,21.33,77.18,100.72,128.97,105.14,114.13,119.34,132.83,122.56,135.89,144.17,147.63,144.68,151.69,157.14,159.61,156.75,154.34,151.16,146.33,153.65,150.54,145.94,139.14,146.29,136.9,133,122.8],"unit":"EUR / MWh"};
+let SIPX_SOURCE="";
+let SIPX={}, SIPXALL=[];   // per-day {m,p}  +  flat sorted [{t,p}]
 async function tryFetchJSON(url){
   const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),12000);
   try{
@@ -401,44 +416,54 @@ async function tryFetchJSON(url){
 }
 async function loadSIPX(){
   const box=document.getElementById("sipxChart");
-  box.innerHTML='<div class="ld">Nalagam SIPX…</div>';
+  if(!SIPXALL.length) box.innerHTML='<div class="ld">Nalagam SIPX…</div>';
   const d=nowLjubljana();
   const fmt=x=>x.toISOString().slice(0,10);
   const start=new Date(d); start.setDate(d.getDate()-1);
   const end=new Date(d);   end.setDate(d.getDate()+2);
+  const target=`https://api.energy-charts.info/price?bzn=SI&start=${fmt(start)}&end=${fmt(end)}`;
   const urls=[
-    `https://api.energy-charts.info/price?bzn=SI&start=${fmt(start)}&end=${fmt(end)}`,
-    `https://api.energy-charts.info/price?bzn=SI`
+    target,
+    `https://api.energy-charts.info/price?bzn=SI`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(target)}`,
+    `https://corsproxy.io/?url=${encodeURIComponent(target)}`
   ];
   let res=null, lastErr="";
-  for(const u of urls){ const r=await tryFetchJSON(u); if(r.data){res=r.data;break;} lastErr=r.err; }
+  for(const u of urls){ const r=await tryFetchJSON(u); if(r.data&&r.data.unix_seconds){res=r.data;break;} lastErr=r.err||"prazen odgovor"; }
   if(!res){
     const blocked=/Failed to fetch|NetworkError|load failed/i.test(lastErr);
+    if(SIPXALL.length){ // vzorec je že prikazan -> ne prepiši grafa, samo opozori
+      const rng=document.getElementById("sipxRange");
+      rng.innerHTML+=` <span style="color:var(--b2)">&middot; žive cene ni bilo mogoče naložiti (${lastErr})</span> `+
+        `<button class="tab" style="padding:2px 8px" onclick="loadSIPX()">znova</button>`;
+      return;
+    }
     box.innerHTML=`<div class="err">SIPX ni dosegljiv (${lastErr}).`+
-      (blocked?` Verjetno blokada zunanjih klicev v predogledu (peskovnik). Deluje na GitHub Pages ali lokalno. `:` `)+
-      `Lahko pa podatke <b>ročno prilepiš</b> v polje spodaj.`+
+      (blocked?` Verjetno blokada zunanjih klicev v predogledu (peskovnik). Na GitHub Pages se naloži samodejno. `:` `)+
+      `Lahko pa podatke <b>ročno prilepiš</b> spodaj.`+
       `<br><br><button class="tab" onclick="loadSIPX()">Poskusi znova</button> `+
-      `<a class="tab" style="text-decoration:none" target="_blank" href="${urls[0]}">Odpri vir &#8599;</a></div>`;
+      `<a class="tab" style="text-decoration:none" target="_blank" href="${target}">Odpri vir &#8599;</a></div>`;
+    document.getElementById("sipxList").innerHTML="";
     return;
   }
   ingestSIPX(res);
 }
 // Sprejme JSON energy-charts (unix_seconds + price), podpira 15-min ali urno ločljivost
-function ingestSIPX(j){
+function ingestSIPX(j, isSeed){
   const us=j.unix_seconds||[], pr=j.price||[];
   if(!us.length){ document.getElementById("sipxChart").innerHTML='<div class="err">Vir nima podatkov (prazen unix_seconds).</div>'; return; }
-  SIPX={};
+  SIPX_SOURCE = isSeed ? "seed" : "live";
+  SIPX={}; SIPXALL=[];
   for(let i=0;i<us.length;i++){
     if(pr[i]==null) continue;
-    const dt=new Date(new Date(us[i]*1000).toLocaleString("en-US",{timeZone:"Europe/Ljubljana"}));
-    const key=`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
-    (SIPX[key]=SIPX[key]||[]).push({m:dt.getHours()*60+dt.getMinutes(),p:pr[i]});
+    const t=new Date(new Date(us[i]*1000).toLocaleString("en-US",{timeZone:"Europe/Ljubljana"}));
+    const key=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")}`;
+    (SIPX[key]=SIPX[key]||[]).push({m:t.getHours()*60+t.getMinutes(),p:pr[i]});
+    SIPXALL.push({t,p:pr[i]});
   }
+  SIPXALL.sort((a,b)=>a.t-b.t);
   const d=nowLjubljana();
-  const tk=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-  const nowMin=d.getHours()*60+d.getMinutes();
-  const day=(SIPX[tk]||[]).slice().sort((a,b)=>a.m-b.m);
-  let cur=null; for(const pt of day){ if(pt.m<=nowMin) cur=pt; else break; }
+  let cur=null; for(const pt of SIPXALL){ if(pt.t<=d) cur=pt; else break; }
   SIPXnow = cur?cur.p:null;
   renderCore();
   renderSIPX();
@@ -448,64 +473,85 @@ function ingestPaste(){
   try{ ingestSIPX(JSON.parse(ta.value)); }
   catch(e){ alert("Neveljaven JSON: "+e.message); }
 }
-let sipxTab=null;
-function renderSIPX(){
-  const d=nowLjubljana();
-  const tk=k=>`${k.getFullYear()}-${String(k.getMonth()+1).padStart(2,"0")}-${String(k.getDate()).padStart(2,"0")}`;
-  const today=tk(d); const tmr=new Date(d); tmr.setDate(d.getDate()+1); const tomorrow=tk(tmr);
-  const tabs=document.getElementById("sipxTabs"); tabs.innerHTML="";
-  const avail=[["danes",today],["jutri",tomorrow]];
-  if(sipxTab===null) sipxTab=today;
-  avail.forEach(([lab,key])=>{
-    const has=(SIPX[key]||[]).length>0;
-    const b=document.createElement("button");
-    b.className="tab"+(sipxTab===key?" on":""); b.textContent=lab+(has?"":" \u2013 ni še objavljeno");
-    if(!has){ b.disabled=true; if(sipxTab===key) sipxTab=today; }
-    else b.onclick=()=>{sipxTab=key;renderSIPX();};
-    tabs.appendChild(b);
-  });
-  drawSIPX(sipxTab, sipxTab===today?d.getHours():-1);
+function priceColor(p,lo,hi){
+  if(p<0) return "hsl(155,72%,46%)";
+  let t=(p-lo)/((hi-lo)||1); t=Math.max(0,Math.min(1,t));
+  return `hsl(${Math.round(125*(1-t))},80%,52%)`; // zelena (poceni) -> rdeča (drago)
 }
-function drawSIPX(key,nowH){
-  const raw=(SIPX[key]||[]).slice();
+function renderSIPX(){
   const chart=document.getElementById("sipxChart"), stats=document.getElementById("sipxStats");
-  if(!raw.length){ chart.innerHTML='<div class="ld">Ni podatkov za izbrani dan.</div>'; stats.innerHTML=""; return; }
-  // agregiraj v urne povprečja (vir je lahko 15-minuten)
-  const sub=raw.length>24;
-  const hourly=[];
-  for(let h=0;h<24;h++){
-    const pts=raw.filter(x=>Math.floor(x.m/60)===h);
-    if(pts.length) hourly.push({h, p:pts.reduce((a,b)=>a+b.p,0)/pts.length});
-  }
-  const data=hourly;
-  const ps=data.map(x=>x.p), mn=Math.min(...ps), mx=Math.max(...ps), av=ps.reduce((a,b)=>a+b,0)/ps.length;
-  const minH=data.find(x=>x.p===mn).h, maxH=data.find(x=>x.p===mx).h;
-  const cheap=[...data].sort((a,b)=>a.p-b.p).slice(0,3).map(x=>String(x.h).padStart(2,"0")).sort();
-  stats.innerHTML=
-    st("povprečje",(av/10).toFixed(2)+" c€")+st("min",(mn/10).toFixed(2)+" c€ @"+String(minH).padStart(2,"0")+"h")+
-    st("max",(mx/10).toFixed(2)+" c€ @"+String(maxH).padStart(2,"0")+"h")+st("najcenejše ure",cheap.join(", "))+
-    (sub?st("ločljivost","15-min \u2192 urno povpr."):"");
-  const W=1000,H=240,pl=42,pr=10,pt=12,pb=24, iw=W-pl-pr, ih=H-pt-pb;
-  const lo=Math.min(0,mn), hi=mx, rng=(hi-lo)||1;
-  const bw=iw/24*0.74, gap=iw/24;
+  if(!SIPXALL.length){ chart.innerHTML='<div class="ld">Ni podatkov.</div>'; return; }
+  const d=nowLjubljana();
+  const f=x=>`${x.getDate()}.${x.getMonth()+1}.`;
+  const badge = SIPX_SOURCE==="live"
+    ? `<span style="color:#2fa84f">&#9679; v živo</span>`
+    : `<span style="color:var(--b2)">&#9679; shranjeni vzorec (osveži za žive cene)</span>`;
+  document.getElementById("sipxRange").innerHTML=`${f(SIPXALL[0].t)} \u2013 ${f(SIPXALL[SIPXALL.length-1].t)}${SIPXALL[0].t.getFullYear()} &middot; ${badge}`;
+  // statistika za danes
+  const tk=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  const today=(SIPX[tk]||[]);
+  if(today.length){
+    const ps=today.map(x=>x.p), mn=Math.min(...ps),mx=Math.max(...ps),av=ps.reduce((a,b)=>a+b,0)/ps.length;
+    const hh=m=>String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
+    stats.innerHTML=st("danes povpr.",(av/10).toFixed(2)+" c€")+
+      st("min",(mn/10).toFixed(2)+" c€ @"+hh(today.find(x=>x.p===mn).m))+
+      st("max",(mx/10).toFixed(2)+" c€ @"+hh(today.find(x=>x.p===mx).m))+
+      st("ločljivost",today.length>24?"15-min":"urno");
+  } else stats.innerHTML="";
+  let nowIdx=-1; for(let i=0;i<SIPXALL.length;i++){ if(SIPXALL[i].t<=d) nowIdx=i; else break; }
+  drawChartMulti(nowIdx);
+  renderList(nowIdx);
+}
+function drawChartMulti(nowIdx){
+  const chart=document.getElementById("sipxChart"), N=SIPXALL.length;
+  const ps=SIPXALL.map(x=>x.p), mn=Math.min(...ps), mx=Math.max(...ps);
+  const lo=Math.min(0,mn), hi=Math.max(mx,1), rng=(hi-lo)||1;
+  const W=1000,H=240,pl=8,prr=42,pt=16,pb=24, iw=W-pl-prr, ih=H-pt-pb;
+  const bw=iw/N;
   let bars="",axis="",grid="";
-  for(let g=0;g<=4;g++){ const val=lo+rng*g/4, y=pt+ih-(val-lo)/rng*ih;
-    grid+=`<line x1="${pl}" y1="${y}" x2="${W-pr}" y2="${y}" stroke="#262e3a" stroke-width="1"/>`;
-    axis+=`<text x="${pl-6}" y="${y+3}" fill="#5a6573" font-size="11" text-anchor="end" font-family="JetBrains Mono">${(val/10).toFixed(1)}</text>`;
+  const ymin=Math.floor(lo/50)*50, ymax=Math.ceil(hi/50)*50;
+  for(let v=ymin; v<=ymax; v+=50){ const y=pt+ih-(v-lo)/rng*ih;
+    grid+=`<line x1="${pl}" y1="${y}" x2="${pl+iw}" y2="${y}" stroke="#222a35" stroke-width="1"/>`;
+    axis+=`<text x="${pl+iw+5}" y="${y+3}" fill="#5a6573" font-size="11" font-family="JetBrains Mono">${v}</text>`;
   }
-  for(let h=0;h<24;h++){
-    const rec=data.find(x=>x.h===h); const x=pl+gap*h+(gap-bw)/2;
-    if(h%3===0) axis+=`<text x="${x+bw/2}" y="${H-7}" fill="#5a6573" font-size="11" text-anchor="middle" font-family="JetBrains Mono">${h}</text>`;
-    if(!rec) continue;
-    const y0=pt+ih-(Math.max(0,rec.p)-lo)/rng*ih;
-    const y1=pt+ih-(Math.min(0,rec.p)-lo)/rng*ih;
-    const isNow=(h===nowH);
-    const col=rec.p<0?"#5a6573":(rec.p<=av?"#2bd6c6":"#f2820a");
-    bars+=`<rect x="${x}" y="${Math.min(y0,y1)}" width="${bw}" height="${Math.abs(y1-y0)||1}" rx="2" fill="${col}" opacity="${isNow?1:.78}"${isNow?' stroke="#fff" stroke-width="1.5"':''}><title>${String(h).padStart(2,"0")}:00 \u2013 ${rec.p.toFixed(1)} €/MWh</title></rect>`;
-    if(isNow) bars+=`<text x="${x+bw/2}" y="${Math.min(y0,y1)-5}" fill="#fff" font-size="10" text-anchor="middle" font-family="JetBrains Mono">zdaj</text>`;
+  for(let i=0;i<N;i++){
+    const p=SIPXALL[i].p, x=pl+bw*i, t=SIPXALL[i].t;
+    const y0=pt+ih-(Math.max(0,p)-lo)/rng*ih, y1=pt+ih-(Math.min(0,p)-lo)/rng*ih;
+    bars+=`<rect x="${x.toFixed(2)}" y="${Math.min(y0,y1).toFixed(2)}" width="${Math.max(bw*0.92,0.6).toFixed(2)}" height="${(Math.abs(y1-y0)||1).toFixed(2)}" fill="${priceColor(p,lo,hi)}"><title>${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")} ${f2(t)} \u2013 ${p.toFixed(1)} €/MWh</title></rect>`;
+    if(t.getMinutes()===0 && t.getHours()%6===0){
+      const lab=t.getHours()===0?`${t.getDate()}.${t.getMonth()+1}.`:`${t.getHours()}:00`;
+      axis+=`<line x1="${x.toFixed(2)}" y1="${pt}" x2="${x.toFixed(2)}" y2="${pt+ih}" stroke="#1b2330" stroke-width="1"/>`;
+      axis+=`<text x="${x.toFixed(2)}" y="${H-8}" fill="#5a6573" font-size="10" text-anchor="middle" font-family="JetBrains Mono">${lab}</text>`;
+    }
   }
+  let nowMark="";
+  if(nowIdx>=0){ const x=(pl+bw*nowIdx+bw/2).toFixed(2);
+    nowMark=`<line x1="${x}" y1="${pt-3}" x2="${x}" y2="${pt+ih}" stroke="#fff" stroke-width="1.5"/>`+
+            `<text x="${x}" y="${pt-5}" fill="#fff" font-size="10" text-anchor="middle" font-family="JetBrains Mono">zdaj</text>`; }
   const zeroY=pt+ih-(0-lo)/rng*ih;
-  chart.innerHTML=`<svg viewBox="0 0 ${W} ${H}">${grid}<line x1="${pl}" y1="${zeroY}" x2="${W-pr}" y2="${zeroY}" stroke="#3a4452" stroke-width="1"/>${bars}${axis}<text x="${pl-6}" y="${pt+6}" fill="#5a6573" font-size="10" text-anchor="end" font-family="JetBrains Mono">c€/kWh</text></svg>`;
+  chart.innerHTML=`<svg viewBox="0 0 ${W} ${H}">${grid}${bars}<line x1="${pl}" y1="${zeroY}" x2="${pl+iw}" y2="${zeroY}" stroke="#3a4452" stroke-width="1"/>${nowMark}${axis}<text x="${pl+iw+5}" y="${pt-2}" fill="#5a6573" font-size="10" font-family="JetBrains Mono">€/MWh</text></svg>`;
+}
+function f2(t){ return ["ned","pon","tor","sre","čet","pet","sob"][t.getDay()]; }
+function renderList(nowIdx){
+  const list=document.getElementById("sipxList");
+  const ps=SIPXALL.map(x=>x.p), mn=Math.min(...ps), mx=Math.max(...ps);
+  const lo=Math.min(0,mn), hi=Math.max(mx,1);
+  let html="", lastDay=null;
+  for(let i=0;i<SIPXALL.length;i++){
+    const it=SIPXALL[i], t=it.t, dk=`${t.getDate()}.${t.getMonth()+1}.`;
+    if(dk!==lastDay){ html+=`<div style="padding:8px 8px 3px;font-family:var(--mono);font-size:11px;color:var(--faint)">${f2(t)} ${dk}</div>`; lastDay=dk; }
+    const isNow=(i===nowIdx), isPast=(i<nowIdx);
+    const w=Math.max(2,((it.p-lo)/((hi-lo)||1))*100);
+    const col=isPast?"#39424f":priceColor(it.p,lo,hi);
+    const tlab=isNow?"Zdaj":`${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`;
+    html+=`<div class="srow${isNow?" now":""}"${isNow?' id="sipxNowRow"':''}>`+
+      `<div class="stime">${tlab}</div>`+
+      `<div class="sprice" style="color:${isPast?'var(--faint)':'var(--ink)'}">${Math.round(it.p)}</div>`+
+      `<div class="sbarwrap"><div class="sbar" style="width:${w.toFixed(1)}%;background:${col}"></div></div></div>`;
+  }
+  list.innerHTML=html;
+  const nr=document.getElementById("sipxNowRow");
+  if(nr) list.scrollTop=Math.max(0,nr.offsetTop-100);
 }
 function st(l,v){ return `<div><span class="lab">${l}</span><span class="num">${v}</span></div>`; }
 
@@ -593,7 +639,8 @@ function renderForecast(out, base){
    ============================================================ */
 renderCore();
 setInterval(renderCore,1000); // sekundna ura + preračun bloka
-loadSIPX();
+ingestSIPX(SEED_SIPX, true);   // takojšen samodejni prikaz (vzorčne cene)
+loadSIPX();                    // poskus žive osvežitve (prepiše vzorec)
 loadForecast();
 setInterval(loadSIPX, 1000*60*15);
 </script>

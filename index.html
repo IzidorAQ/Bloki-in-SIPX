@@ -126,6 +126,8 @@
   .fcd .ft{font-size:11px;color:var(--mut);font-family:var(--mono);line-height:1.7}
   .fcd .ft b{color:var(--ink);font-weight:500}
   .fcd .ft .gd{color:var(--energy)}
+  .fcd .drv{display:grid;grid-template-columns:1fr 1fr;gap:3px 10px;margin-top:9px;padding-top:9px;border-top:1px solid var(--line);font-size:10.5px;color:var(--mut);font-family:var(--mono)}
+  .fcd .drv b{color:var(--ink);font-weight:500}
 
   .note{font-size:11.5px;color:var(--faint);line-height:1.6;margin-top:12px}
   .err{color:var(--b2);font-family:var(--mono);font-size:12px;padding:10px;background:rgba(242,130,10,.08);
@@ -668,7 +670,7 @@ function computeForecast(){
     const free=isFreeDayEU(new Date(Yy,Mm-1,Dd));
     const dev=Math.max(0,15.5-tmean)+0.7*Math.max(0,tmean-24);
     const demand=(free?LOAD_WE:LOAD)[hr]*(1+0.05*dev);
-    feat.push({t:time[i],date:time[i].slice(0,10),hr,wind,solar,demand});
+    feat.push({t:time[i],date:time[i].slice(0,10),hr,wind,solar,demand,tmean,free});
   }
   const act={}; { const tmp={};
     SIPXALL.forEach(x=>{ const k=`${x.t.getFullYear()}-${x.t.getMonth()+1}-${x.t.getDate()}-${x.t.getHours()}`; (tmp[k]=tmp[k]||[]).push(x.p); });
@@ -727,6 +729,12 @@ function renderForecast(feat,beta,fit,nTrain){
       .slice(0,3).map(r=>String(r.hr).padStart(2,"0")).sort();
     const lab=isToday?"danes":(dd.getTime()===todayStart.getTime()+864e5?"jutri":DOW[dd.getDay()].slice(0,3));
     const hasAct=acts.length>0;
+    const mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
+    const windAvg=mean(rows.map(r=>r.wind));
+    const windMax=Math.max(...rows.map(r=>r.wind));
+    const solarSum=rows.reduce((a,r)=>a+r.solar,0)/1000; // kWh/m² na dan
+    const tempAvg=mean(rows.map(r=>r.tmean));
+    const free=rows[0].free;
     const el=document.createElement("div"); el.className="fcd"+(isToday?" today":"");
     el.innerHTML=
       `<div class="hd"><span class="dow">${lab}</span><span class="dt">${String(D).padStart(2,"0")}.${String(M).padStart(2,"0")}.</span></div>`+
@@ -734,7 +742,13 @@ function renderForecast(feat,beta,fit,nTrain){
       `<div class="ft">`+
       (pavg!=null?`napoved povpr. <b>${c(pavg)}</b> c€/kWh<br>`:``)+
       (hasAct?`dejansko ${aavg!=null?`<b>${c(aavg)}</b> c€/kWh `:``}<span style="color:#fff">&#9472;</span><br>`:``)+
-      `najceneje <b class="gd">${cheap.join(", ")}</b></div>`;
+      `najceneje <b class="gd">${cheap.join(", ")}</b></div>`+
+      `<div class="drv">`+
+        `<span>veter <b>${windAvg.toFixed(1)}</b> m/s <span style="color:var(--faint)">(do ${windMax.toFixed(0)})</span></span>`+
+        `<span>sonce <b>${solarSum.toFixed(1)}</b> kWh/m²</span>`+
+        `<span>temp <b>${Math.round(tempAvg)}°</b></span>`+
+        `<span>poraba <b>${free?"prost dan":"delovni"}</b></span>`+
+      `</div>`;
     fc.appendChild(el);
   });
   const fitTxt = beta? `Model umerjen na ${nTrain} urah (R² ${fit!=null?fit.toFixed(2):"?"}).` : `Premalo prekrivanja SIPX in vremena za umeritev (na GitHub Pages se naloži več dni cen).`;

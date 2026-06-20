@@ -182,6 +182,12 @@
       <div class="tabs" id="sipxTabs"></div>
       <div class="stats" id="sipxStats"></div>
       <div class="barwrap" id="sipxChart"><div class="ld">Nalagam…</div></div>
+      <details style="margin-top:12px">
+        <summary style="cursor:pointer;color:var(--mut);font-size:12px;font-family:var(--mono)">Ročni vnos podatkov (če samodejni klic ne uspe)</summary>
+        <div class="note" style="margin-top:8px">Odpri <span style="color:var(--energy)">api.energy-charts.info/price?bzn=SI</span>, kopiraj celoten JSON in ga prilepi sem:</div>
+        <textarea id="sipxPaste" placeholder='{"unix_seconds":[...],"price":[...]}' style="width:100%;min-height:70px;margin-top:8px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px;font-family:var(--mono);font-size:11px"></textarea>
+        <button class="tab" style="margin-top:8px" onclick="ingestPaste()">Prikaži prilepljene cene</button>
+      </details>
     </section>
 
     <!-- FORECAST -->
@@ -409,24 +415,38 @@ async function loadSIPX(){
   if(!res){
     const blocked=/Failed to fetch|NetworkError|load failed/i.test(lastErr);
     box.innerHTML=`<div class="err">SIPX ni dosegljiv (${lastErr}).`+
-      (blocked?` To je skoraj zagotovo blokada zunanjih klicev v predogledu (peskovnik). Odpri datoteko na GitHub Pages ali lokalno in deluje. `:` `)+
+      (blocked?` Verjetno blokada zunanjih klicev v predogledu (peskovnik). Deluje na GitHub Pages ali lokalno. `:` `)+
+      `Lahko pa podatke <b>ročno prilepiš</b> v polje spodaj.`+
       `<br><br><button class="tab" onclick="loadSIPX()">Poskusi znova</button> `+
       `<a class="tab" style="text-decoration:none" target="_blank" href="${urls[0]}">Odpri vir &#8599;</a></div>`;
     return;
   }
-  const us=res.unix_seconds||[], pr=res.price||[];
+  ingestSIPX(res);
+}
+// Sprejme JSON energy-charts (unix_seconds + price), podpira 15-min ali urno ločljivost
+function ingestSIPX(j){
+  const us=j.unix_seconds||[], pr=j.price||[];
+  if(!us.length){ document.getElementById("sipxChart").innerHTML='<div class="err">Vir nima podatkov (prazen unix_seconds).</div>'; return; }
   SIPX={};
   for(let i=0;i<us.length;i++){
     if(pr[i]==null) continue;
     const dt=new Date(new Date(us[i]*1000).toLocaleString("en-US",{timeZone:"Europe/Ljubljana"}));
     const key=`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
-    (SIPX[key]=SIPX[key]||[]).push({h:dt.getHours(),p:pr[i]});
+    (SIPX[key]=SIPX[key]||[]).push({m:dt.getHours()*60+dt.getMinutes(),p:pr[i]});
   }
+  const d=nowLjubljana();
   const tk=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-  const cur=(SIPX[tk]||[]).find(x=>x.h===d.getHours());
+  const nowMin=d.getHours()*60+d.getMinutes();
+  const day=(SIPX[tk]||[]).slice().sort((a,b)=>a.m-b.m);
+  let cur=null; for(const pt of day){ if(pt.m<=nowMin) cur=pt; else break; }
   SIPXnow = cur?cur.p:null;
   renderCore();
   renderSIPX();
+}
+function ingestPaste(){
+  const ta=document.getElementById("sipxPaste");
+  try{ ingestSIPX(JSON.parse(ta.value)); }
+  catch(e){ alert("Neveljaven JSON: "+e.message); }
 }
 let sipxTab=null;
 function renderSIPX(){
@@ -447,17 +467,24 @@ function renderSIPX(){
   drawSIPX(sipxTab, sipxTab===today?d.getHours():-1);
 }
 function drawSIPX(key,nowH){
-  const data=(SIPX[key]||[]).slice().sort((a,b)=>a.h-b.h);
+  const raw=(SIPX[key]||[]).slice();
   const chart=document.getElementById("sipxChart"), stats=document.getElementById("sipxStats");
-  if(!data.length){ chart.innerHTML='<div class="ld">Ni podatkov za izbrani dan.</div>'; stats.innerHTML=""; return; }
+  if(!raw.length){ chart.innerHTML='<div class="ld">Ni podatkov za izbrani dan.</div>'; stats.innerHTML=""; return; }
+  // agregiraj v urne povprečja (vir je lahko 15-minuten)
+  const sub=raw.length>24;
+  const hourly=[];
+  for(let h=0;h<24;h++){
+    const pts=raw.filter(x=>Math.floor(x.m/60)===h);
+    if(pts.length) hourly.push({h, p:pts.reduce((a,b)=>a+b.p,0)/pts.length});
+  }
+  const data=hourly;
   const ps=data.map(x=>x.p), mn=Math.min(...ps), mx=Math.max(...ps), av=ps.reduce((a,b)=>a+b,0)/ps.length;
   const minH=data.find(x=>x.p===mn).h, maxH=data.find(x=>x.p===mx).h;
-  // najcenejše 3 ure
   const cheap=[...data].sort((a,b)=>a.p-b.p).slice(0,3).map(x=>String(x.h).padStart(2,"0")).sort();
   stats.innerHTML=
     st("povprečje",(av/10).toFixed(2)+" c€")+st("min",(mn/10).toFixed(2)+" c€ @"+String(minH).padStart(2,"0")+"h")+
-    st("max",(mx/10).toFixed(2)+" c€ @"+String(maxH).padStart(2,"0")+"h")+st("najcenejše ure",cheap.join(", "));
-  // SVG bar chart
+    st("max",(mx/10).toFixed(2)+" c€ @"+String(maxH).padStart(2,"0")+"h")+st("najcenejše ure",cheap.join(", "))+
+    (sub?st("ločljivost","15-min \u2192 urno povpr."):"");
   const W=1000,H=240,pl=42,pr=10,pt=12,pb=24, iw=W-pl-pr, ih=H-pt-pb;
   const lo=Math.min(0,mn), hi=mx, rng=(hi-lo)||1;
   const bw=iw/24*0.74, gap=iw/24;

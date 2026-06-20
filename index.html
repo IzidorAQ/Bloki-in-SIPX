@@ -59,7 +59,12 @@
   .strip .seg{position:relative;display:flex;align-items:center;justify-content:center;
     font-family:var(--mono);font-size:10px;color:#0d1014;font-weight:700;min-width:0}
   .strip .seg.now{outline:2px solid #fff;outline-offset:-2px;z-index:2}
-  .ticks{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--faint);margin-top:5px}
+  .ticks{position:relative;height:18px;margin-top:4px;font-family:var(--mono);font-size:10px;color:var(--faint)}
+  .ticks .tk{position:absolute;top:6px}
+  .ticks .tk i{position:absolute;top:-6px;width:1px;height:5px;background:var(--faint);opacity:.55}
+  .ticks .tk.c{transform:translateX(-50%)} .ticks .tk.c i{left:50%}
+  .ticks .tk.l{transform:none} .ticks .tk.l i{left:0}
+  .ticks .tk.r{transform:translateX(-100%)} .ticks .tk.r i{right:0}
 
   /* LADDER */
   .ladder{display:flex;flex-direction:column;gap:8px}
@@ -77,7 +82,7 @@
   .strike{color:var(--faint);text-decoration:line-through;font-size:12px;font-weight:400}
 
   /* ENERGY NOW */
-  .enow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .enow{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
   .ecard{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px}
   .ecard .lab{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em}
   .ecard .v{font-family:var(--mono);font-size:26px;font-weight:700;margin-top:6px;line-height:1}
@@ -111,16 +116,16 @@
   .srow .sbar{height:14px;border-radius:7px;min-width:3px}
 
   /* forecast */
-  .fc{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
-  .fcd{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center}
+  .fc{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+  .fcd{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px}
+  .fcd.today{border-color:var(--energy)}
+  .fcd .hd{display:flex;justify-content:space-between;align-items:baseline}
   .fcd .dow{font-family:var(--display);font-weight:700;font-size:14px}
   .fcd .dt{font-size:10px;color:var(--faint);font-family:var(--mono)}
-  .fcd .gauge{height:7px;border-radius:4px;margin:10px 0;background:linear-gradient(90deg,var(--b5),var(--b3),var(--b1))}
-  .fcd .dot{width:11px;height:11px;border-radius:50%;border:2px solid var(--bg);margin:-9px auto 8px;position:relative}
-  .fcd .est{font-family:var(--mono);font-size:18px;font-weight:700}
-  .fcd .estu{font-size:9px;color:var(--faint);font-family:var(--mono)}
-  .fcd .lvl{font-size:11px;margin-top:7px;font-weight:600}
-  .fcd .drv{font-size:10px;color:var(--mut);margin-top:7px;font-family:var(--mono);line-height:1.5}
+  .fcd svg{width:100%;height:auto;margin:6px 0 2px;display:block}
+  .fcd .ft{font-size:11px;color:var(--mut);font-family:var(--mono);line-height:1.7}
+  .fcd .ft b{color:var(--ink);font-weight:500}
+  .fcd .ft .gd{color:var(--energy)}
 
   .note{font-size:11.5px;color:var(--faint);line-height:1.6;margin-top:12px}
   .err{color:var(--b2);font-family:var(--mono);font-size:12px;padding:10px;background:rgba(242,130,10,.08);
@@ -166,7 +171,7 @@
     <section class="panel">
       <h2>Potek blokov danes</h2>
       <div class="strip" id="strip"></div>
-      <div class="ticks"><span>0</span><span>3</span><span>6</span><span>9</span><span>12</span><span>15</span><span>18</span><span>21</span><span>24</span></div>
+      <div class="ticks" id="ticks"></div>
     </section>
 
     <!-- ENERGY NOW -->
@@ -223,7 +228,10 @@ const CFG = {
   // dokler Agencija ne objavi tarif za 2027 (predvidoma dec. 2026).
   dinMarkup: 11.99,   // GEN-I Dinamični pribitek na SIPX [€/MWh]
   dinCap:    220,     // kapica dinamične cene energije [€/MWh]
-  ddv:       0.22     // info; izračuni spodaj so BREZ DDV
+  ddv:       0.22,    // DDV
+  // Dajatve na kWh (BREZ DDV). PREVERI / PRILAGODI po svojem računu:
+  trosarina: 0.00153, // trošarina [€/kWh]
+  prispevki: 0.00678  // prispevki skupaj: OVE+SPTE + operater trga + URE [€/kWh]
 };
 
 /* Kombinirane tarifne postavke (prenos+distribucija), skupina 0, obdobje 1.3.2026-31.12.2026.
@@ -341,6 +349,17 @@ function renderCore(){
     seg.title=`${s}:00-${e}:00 \u00b7 blok ${bl}`;
     strip.appendChild(seg);
   }
+  // ticks samo na mejnih urah (prehodi blokov)
+  const segs=schedFor(d);
+  const bounds=[segs[0][0],...segs.map(x=>x[1])];
+  const ticks=document.getElementById("ticks"); ticks.innerHTML="";
+  bounds.forEach(hr=>{
+    const cls=hr===0?"l":(hr===24?"r":"c");
+    const sp=document.createElement("span");
+    sp.className="tk "+cls; sp.style.left=(hr/24*100)+"%";
+    sp.innerHTML=`<i></i>${hr}`;
+    ticks.appendChild(sp);
+  });
 
   // ladder
   const lad=document.getElementById("ladder"); lad.innerHTML="";
@@ -383,16 +402,20 @@ function renderEnergyNow(block,d){
   const spot=SIPXnow;                       // €/MWh
   const din=effDin(spot);                   // €/MWh (kar plačaš za energijo)
   const omr=TARIFF[block].en*1000;          // €/MWh ekvivalent omrežnine za energijo
-  const tot=din+omr;                        // €/MWh skupaj (energija + omrežnina za energijo, brez DDV/dajatev)
+  const tot=din+omr;                        // €/MWh skupaj (brez DDV/dajatev)
+  const daj=(CFG.trosarina+CFG.prispevki)*1000; // €/MWh dajatve
+  const allin=(tot+daj)*(1+CFG.ddv);        // €/MWh končna cena z DDV
   const c=v=>(v/10).toFixed(2);             // €/MWh -> c€/kWh
   el.innerHTML=
     card("SIPX spot (ta ura)",c(spot),"c€/kWh &middot; "+spot.toFixed(1)+" €/MWh",false)+
     card("Dinamični (spot+pribitek)",c(din),"c€/kWh &middot; kapica "+CFG.dinCap+" €/MWh",false)+
-    card("Skupaj z omrežnino (blok "+block+")",c(tot),"c€/kWh &middot; energija + omrežnina, brez DDV",true);
+    card("Energija + omrežnina (blok "+block+")",c(tot),"c€/kWh &middot; brez DDV in dajatev",false)+
+    card("Končna cena z DDV in dajatvami",c(allin),"c€/kWh &middot; +trošarina +prispevki +"+Math.round(CFG.ddv*100)+"% DDV",true);
   document.getElementById("enote").innerHTML=
-    `Skupna mejna cena prevzema energije zdaj = dinamična cena energije (${CFG.dinMarkup} €/MWh pribitek na SIPX) `+
-    `+ omrežnina za energijo bloka ${block} (${TARIFF[block].en.toFixed(5)} €/kWh). Brez DDV, trošarine in prispevkov. `+
-    `Strošek <b>moči</b> (€/kW) se obračuna mesečno po dogovorjeni moči in ni vključen v ceno na kWh.`;
+    `Končna cena na kWh = (dinamična energija ${din.toFixed(1)} + omrežnina energija bloka ${block} ${omr.toFixed(1)} `+
+    `+ trošarina ${(CFG.trosarina*1000).toFixed(2)} + prispevki ${(CFG.prispevki*1000).toFixed(2)}) €/MWh, vse \u00d7 ${(1+CFG.ddv).toFixed(2)} (DDV). `+
+    `Strošek <b>moči</b> (€/kW) se obračuna mesečno po dogovorjeni moči in ni v ceni na kWh. `+
+    `Trošarino in prispevke preveri na svojem računu in po potrebi prilagodi v CFG.`;
 }
 function card(lab,v,u,total){
   return `<div class="ecard${total?" total":""}"><div class="lab">${lab}</div>`+
@@ -419,7 +442,7 @@ async function loadSIPX(){
   if(!SIPXALL.length) box.innerHTML='<div class="ld">Nalagam SIPX…</div>';
   const d=nowLjubljana();
   const fmt=x=>x.toISOString().slice(0,10);
-  const start=new Date(d); start.setDate(d.getDate()-1);
+  const start=new Date(d); start.setDate(d.getDate()-6);
   const end=new Date(d);   end.setDate(d.getDate()+2);
   const target=`https://api.energy-charts.info/price?bzn=SI&start=${fmt(start)}&end=${fmt(end)}`;
   const urls=[
@@ -467,6 +490,7 @@ function ingestSIPX(j, isSeed){
   SIPXnow = cur?cur.p:null;
   renderCore();
   renderSIPX();
+  if(!isSeed && typeof loadForecast==="function") loadForecast(); // prekalibriraj napoved z živimi cenami
 }
 function ingestPaste(){
   const ta=document.getElementById("sipxPaste");
@@ -566,72 +590,143 @@ const ZONES=[ // utež = vpliv na ceno v regiji (DE prevladuje)
   {n:"HR",lat:45.50,lon:15.55,w:.08},
   {n:"SI",lat:46.05,lon:14.51,w:.08}
 ];
+// tipičen dnevni profil porabe (normaliziran), za obliko dneva
+const LOAD=[.62,.58,.55,.54,.55,.60,.70,.82,.88,.90,.90,.89,.88,.86,.84,.84,.87,.93,1.0,.98,.92,.84,.75,.68];
+// večkratna linearna regresija (normalne enačbe + Gaussova eliminacija)
+function solveLin(A,b){
+  const n=b.length, M=A.map((r,i)=>[...r,b[i]]);
+  for(let c=0;c<n;c++){
+    let piv=c; for(let r=c+1;r<n;r++) if(Math.abs(M[r][c])>Math.abs(M[piv][c])) piv=r;
+    [M[c],M[piv]]=[M[piv],M[c]];
+    if(Math.abs(M[c][c])<1e-12) return null;
+    for(let r=0;r<n;r++) if(r!==c){ const f=M[r][c]/M[c][c]; for(let k=c;k<=n;k++) M[r][k]-=f*M[c][k]; }
+  }
+  return M.map((r,i)=>r[n]/r[i]);
+}
+function ols(X,y){
+  const n=X.length, p=X[0].length; // X[i] = [1, x1, x2, ...]
+  const mu=new Array(p).fill(0), sd=new Array(p).fill(1);
+  for(let j=1;j<p;j++){ let m=0; for(let i=0;i<n;i++) m+=X[i][j]; m/=n; mu[j]=m;
+    let v=0; for(let i=0;i<n;i++) v+=(X[i][j]-m)**2; sd[j]=Math.sqrt(v/n)||1; }
+  const Z=X.map(r=>r.map((v,j)=>j===0?1:(v-mu[j])/sd[j])); // standardiziraj za stabilnost
+  const A=Array.from({length:p},()=>new Array(p).fill(0)), b=new Array(p).fill(0);
+  for(let i=0;i<n;i++) for(let j=0;j<p;j++){ b[j]+=Z[i][j]*y[i]; for(let k=0;k<p;k++) A[j][k]+=Z[i][j]*Z[i][k]; }
+  for(let j=0;j<p;j++) A[j][j]+=1e-6;
+  const g=solveLin(A,b); if(!g) return null;
+  const beta=new Array(p); let b0=g[0];
+  for(let j=1;j<p;j++){ beta[j]=g[j]/sd[j]; b0-=beta[j]*mu[j]; }
+  beta[0]=b0; return beta; // koeficienti v izvirnih enotah
+}
+function r2(X,y,beta){
+  const yb=y.reduce((a,b)=>a+b,0)/y.length; let ss=0,st=0;
+  for(let i=0;i<X.length;i++){ const pr=X[i].reduce((a,v,j)=>a+v*beta[j],0); ss+=(y[i]-pr)**2; st+=(y[i]-yb)**2; }
+  return st? 1-ss/st : 0;
+}
 async function loadForecast(){
+  const fc=document.getElementById("fc");
+  if(!fc.querySelector(".fcd")) fc.innerHTML='<div class="ld">Nalagam vreme in računam napoved…</div>';
   try{
-    const reqs=ZONES.map(z=>fetch(
+    const reqs=ZONES.map(z=>tryFetchJSON(
       `https://api.open-meteo.com/v1/forecast?latitude=${z.lat}&longitude=${z.lon}`+
-      `&daily=temperature_2m_max,temperature_2m_min,wind_speed_10m_max,shortwave_radiation_sum,cloud_cover_mean`+
-      `&forecast_days=7&timezone=Europe%2FBerlin`).then(r=>r.json()));
-    const res=await Promise.all(reqs);
-    const days=res[0].daily.time;
-    const out=[];
-    for(let i=0;i<days.length;i++){
-      let demand=0, wind=0, solar=0;
-      ZONES.forEach((z,zi)=>{
-        const dd=res[zi].daily;
-        const tmax=dd.temperature_2m_max[i], tmin=dd.temperature_2m_min[i];
-        const tmean=(tmax+tmin)/2;
-        // odmik od ~15.5C dviguje povpraševanje (gretje/hlajenje)
-        const dev=Math.max(0,15.5-tmean)*1.0 + Math.max(0,tmean-23)*0.7;
-        demand += z.w*dev;
-        wind   += z.w*(dd.wind_speed_10m_max[i]||0);
-        solar  += z.w*(dd.shortwave_radiation_sum[i]||0);
+      `&hourly=temperature_2m,wind_speed_100m,shortwave_radiation&past_days=5&forecast_days=6&timezone=Europe%2FLjubljana`));
+    const rs=await Promise.all(reqs);
+    const bad=rs.find(r=>!r.data); if(bad) throw new Error(bad.err||"napaka pri vremenu");
+    const res=rs.map(r=>r.data), time=res[0].hourly.time;
+    // urne značilke
+    const feat=[];
+    for(let i=0;i<time.length;i++){
+      let wind=0,solar=0,tmean=0;
+      ZONES.forEach((z,zi)=>{ const h=res[zi].hourly;
+        wind+=z.w*(h.wind_speed_100m[i]||0);
+        solar+=z.w*(h.shortwave_radiation[i]||0);
+        tmean+=z.w*(h.temperature_2m[i]!=null?h.temperature_2m[i]:15);
       });
-      // normaliziraj v indeks pritiska na ceno (višje = dražje)
-      // veter in sonce nižata ceno, povpraševanje jo dviguje
-      const idx = demand*0.9 - wind*0.45 - solar*1.1;
-      out.push({date:days[i], idx, demand, wind, solar});
+      const hr=parseInt(time[i].slice(11,13),10);
+      const dev=Math.max(0,15.5-tmean)+0.7*Math.max(0,tmean-24);
+      const demand=LOAD[hr]*(1+0.05*dev);
+      feat.push({t:time[i],date:time[i].slice(0,10),hr,wind,solar,demand});
     }
-    // skaliraj indeks v 0..1 in v oceno €/MWh okoli baze (povprečje SIPX, sicer 90)
-    let base=90;
-    const all=[].concat(...Object.values(SIPX)).map(x=>x.p);
-    if(all.length) base=all.reduce((a,b)=>a+b,0)/all.length;
-    const idxs=out.map(o=>o.idx), imn=Math.min(...idxs), imx=Math.max(...idxs), ir=(imx-imn)||1;
-    out.forEach(o=>{
-      o.norm=(o.idx-imn)/ir;                 // 0..1
-      o.est=Math.round(base*(0.72+o.norm*0.7)); // groba ocena €/MWh
+    // dejanske urne SIPX cene
+    const act={}; { const tmp={};
+      SIPXALL.forEach(x=>{ const k=`${x.t.getFullYear()}-${x.t.getMonth()+1}-${x.t.getDate()}-${x.t.getHours()}`; (tmp[k]=tmp[k]||[]).push(x.p); });
+      for(const k in tmp) act[k]=tmp[k].reduce((a,b)=>a+b,0)/tmp[k].length;
+    }
+    const keyOf=f=>{ const [Y,M,D]=f.date.split("-").map(Number); return `${Y}-${M}-${D}-${f.hr}`; };
+    const X=[],Y=[];
+    feat.forEach(f=>{ const p=act[keyOf(f)]; if(p!=null){ X.push([1,f.wind,f.solar,f.demand]); Y.push(p); } });
+    let beta=null,fit=null;
+    if(X.length>=8){ beta=ols(X,Y); if(beta) fit=r2(X,Y,beta); }
+    feat.forEach(f=>{ const a=act[keyOf(f)];
+      f.actual=a!=null?a:null;
+      f.pred=beta?(beta[0]+beta[1]*f.wind+beta[2]*f.solar+beta[3]*f.demand):null;
     });
-    renderForecast(out, base);
+    renderForecast(feat,beta,fit,X.length);
   }catch(e){
-    const blocked=/Failed to fetch|NetworkError|load failed/i.test(e.message);
-    document.getElementById("fc").innerHTML=`<div class="err">Vremenska napoved ni dosegljiva (${e.message}).`+
-      (blocked?` Verjetno blokada zunanjih klicev v predogledu; deluje na GitHub Pages ali lokalno.`:``)+
+    const blocked=/Failed to fetch|NetworkError|load failed|napaka/i.test(e.message);
+    fc.innerHTML=`<div class="err">Napoved ni dosegljiva (${e.message}).`+
+      (blocked?` Verjetno blokada zunanjih klicev v predogledu; deluje na GitHub Pages.`:``)+
       ` <button class="tab" onclick="loadForecast()">Poskusi znova</button></div>`;
   }
 }
-function renderForecast(out, base){
+function fcMiniSVG(rows,lo,hi,nowHr){
+  const W=240,H=72,pl=2,prr=2,pt=5,pb=12,iw=W-pl-prr,ih=H-pt-pb,rng=(hi-lo)||1,bw=iw/24;
+  let bars="",axis="",pts=[];
+  for(let h=0;h<24;h++){
+    const r=rows.find(x=>x.hr===h), x=pl+bw*h;
+    const v=r?(r.pred!=null?r.pred:r.actual):null;
+    if(v!=null){
+      const y0=pt+ih-(Math.max(0,v)-lo)/rng*ih, y1=pt+ih-(Math.min(0,v)-lo)/rng*ih;
+      bars+=`<rect x="${x.toFixed(1)}" y="${Math.min(y0,y1).toFixed(1)}" width="${(bw*0.84).toFixed(1)}" height="${(Math.abs(y1-y0)||1).toFixed(1)}" rx="0.7" fill="${priceColor(v,lo,hi)}" opacity="0.9"><title>${h}:00 \u2013 ${(v/10).toFixed(1)} c€/kWh</title></rect>`;
+    }
+    if(r&&r.actual!=null){ const ya=pt+ih-(r.actual-lo)/rng*ih; pts.push(`${(x+bw*0.42).toFixed(1)},${ya.toFixed(1)}`); }
+    if(h===nowHr) axis+=`<line x1="${(x+bw*0.42).toFixed(1)}" y1="${pt-2}" x2="${(x+bw*0.42).toFixed(1)}" y2="${pt+ih}" stroke="#fff" stroke-width="1"/>`;
+    if(h%6===0) axis+=`<text x="${(x+bw*0.42).toFixed(1)}" y="${H-2}" fill="#5a6573" font-size="8" text-anchor="middle" font-family="JetBrains Mono">${h}</text>`;
+  }
+  const line=pts.length>1?`<polyline points="${pts.join(' ')}" fill="none" stroke="#fff" stroke-width="1.1" opacity="0.95"/>`:"";
+  const zeroY=pt+ih-(0-lo)/rng*ih;
+  return `<svg viewBox="0 0 ${W} ${H}"><line x1="${pl}" y1="${zeroY.toFixed(1)}" x2="${pl+iw}" y2="${zeroY.toFixed(1)}" stroke="#3a4452" stroke-width="0.5"/>${bars}${line}${axis}</svg>`;
+}
+function renderForecast(feat,beta,fit,nTrain){
   const fc=document.getElementById("fc"); fc.innerHTML="";
-  const LV=[[0.2,"Nizke",  "var(--b5)"],[0.4,"Zmerne","var(--b4)"],
-            [0.6,"Srednje","var(--b3)"],[0.8,"Povišane","var(--b2)"],[1.1,"Visoke","var(--b1)"]];
-  out.forEach((o,i)=>{
-    const d=new Date(o.date+"T12:00:00");
-    let lvl=LV.find(l=>o.norm<l[0])||LV[LV.length-1];
-    const card=document.createElement("div"); card.className="fcd";
-    card.innerHTML=
-      `<div class="dow">${i===0?"danes":(i===1?"jutri":DOW[d.getDay()].slice(0,3))}</div>`+
-      `<div class="dt">${String(d.getDate()).padStart(2,"0")}.${String(d.getMonth()+1).padStart(2,"0")}.</div>`+
-      `<div class="gauge"></div>`+
-      `<div class="dot" style="background:${lvl[2]};margin-left:${(o.norm*100).toFixed(0)}%"></div>`+
-      `<div class="est">${o.est}</div><div class="estu">€/MWh ocena</div>`+
-      `<div class="lvl" style="color:${lvl[2]}">${lvl[1]}</div>`+
-      `<div class="drv">veter ${o.wind.toFixed(0)} &middot; sonce ${o.solar.toFixed(0)}<br>povpr. ${o.demand.toFixed(1)}</div>`;
-    fc.appendChild(card);
+  const d=nowLjubljana();
+  const byDate={}; feat.forEach(f=>{ (byDate[f.date]=byDate[f.date]||[]).push(f); });
+  const allP=feat.flatMap(f=>[f.pred,f.actual].filter(v=>v!=null));
+  if(!allP.length){ fc.innerHTML='<div class="err">Ni dovolj podatkov za napoved.</div>'; return; }
+  const lo=Math.min(0,...allP), hi=Math.max(...allP,1);
+  const todayStart=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+  const dates=Object.keys(byDate).sort().filter(dk=>{ const [Y,M,D]=dk.split("-").map(Number); return new Date(Y,M-1,D)>=todayStart; }).slice(0,6);
+  const c=v=>(v/10).toFixed(1);
+  dates.forEach(dk=>{
+    const rows=byDate[dk].slice().sort((a,b)=>a.hr-b.hr);
+    const [Y,M,D]=dk.split("-").map(Number); const dd=new Date(Y,M-1,D);
+    const isToday=dd.getTime()===todayStart.getTime();
+    const nowHr=isToday?d.getHours():-1;
+    const preds=rows.filter(r=>r.pred!=null).map(r=>r.pred);
+    const acts=rows.filter(r=>r.actual!=null).map(r=>r.actual);
+    const pavg=preds.length?preds.reduce((a,b)=>a+b,0)/preds.length:null;
+    const aavg=acts.length?acts.reduce((a,b)=>a+b,0)/acts.length:null;
+    const cheapSrc=rows.filter(r=>(r.pred!=null||r.actual!=null));
+    const cheap=cheapSrc.slice().sort((a,b)=>((a.pred!=null?a.pred:a.actual))-((b.pred!=null?b.pred:b.actual)))
+      .slice(0,3).map(r=>String(r.hr).padStart(2,"0")).sort();
+    const lab=isToday?"danes":(dd.getTime()===todayStart.getTime()+864e5?"jutri":DOW[dd.getDay()].slice(0,3));
+    const hasAct=acts.length>0;
+    const el=document.createElement("div"); el.className="fcd"+(isToday?" today":"");
+    el.innerHTML=
+      `<div class="hd"><span class="dow">${lab}</span><span class="dt">${String(D).padStart(2,"0")}.${String(M).padStart(2,"0")}.</span></div>`+
+      fcMiniSVG(rows,lo,hi,nowHr)+
+      `<div class="ft">`+
+      (pavg!=null?`napoved povpr. <b>${c(pavg)}</b> c€/kWh<br>`:``)+
+      (hasAct?`dejansko ${aavg!=null?`<b>${c(aavg)}</b> c€/kWh `:``}<span style="color:#fff">&#9472;</span><br>`:``)+
+      `najceneje <b class="gd">${cheap.join(", ")}</b></div>`;
+    fc.appendChild(el);
   });
+  const fitTxt = beta? `Model umerjen na ${nTrain} urah (R² ${fit!=null?fit.toFixed(2):"?"}).` : `Premalo prekrivanja SIPX in vremena za umeritev (na GitHub Pages se naloži več dni cen).`;
   document.getElementById("fcnote").innerHTML=
-    `Poenostavljen model: ocena temelji na vetru (nižja cena), sončnem obsevanju (nižja cena) in `+
-    `temperaturnem odmiku = povpraševanju (višja cena) v DE, AT, severni Italiji, HU, HR in SI, uteženo po `+
-    `vplivu na regijo. Baza = ${base.toFixed(0)} €/MWh (povprečje razpoložljivega SIPX). `+
-    `To <b>ni</b> tržna napoved, ampak indikacija tendence. Vir vremena: Open-Meteo.`;
+    `Urna napoved iz vremena: večkratna regresija cene na veter (100 m), sončno obsevanje in profil porabe `+
+    `v DE, AT, sev. Italiji, HU, HR in SI, uteženo. ${fitTxt} `+
+    `Stolpci so napovedane cene (barva = poceni&#8594;drago), bela črta je dejanski SIPX, kjer obstaja. `+
+    `${beta?`Koef.: veter ${beta[1].toFixed(1)}, sonce ${beta[2].toFixed(2)}, poraba ${beta[3].toFixed(0)} €/MWh. `:``}`+
+    `Groba ocena, ne tržna napoved. Vir vremena: Open-Meteo.`;
 }
 
 /* ============================================================

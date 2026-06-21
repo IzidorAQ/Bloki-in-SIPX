@@ -599,16 +599,16 @@ function drawChartMulti(nowIdx){
   const ymin=Math.floor(lo/50)*50, ymax=Math.ceil(hi/50)*50;
   for(let v=ymin; v<=ymax; v+=50){ const y=pt+ih-(v-lo)/rng*ih;
     grid+=`<line x1="${pl}" y1="${y}" x2="${pl+iw}" y2="${y}" stroke="#222a35" stroke-width="1"/>`;
-    axis+=`<text x="${pl+iw+5}" y="${y+3}" fill="#5a6573" font-size="15" font-family="JetBrains Mono">${v}</text>`;
+    axis+=`<text x="${pl+iw+5}" y="${y+3}" fill="#aeb9c7" font-size="15" font-family="JetBrains Mono">${v}</text>`;
   }
   for(let i=0;i<N;i++){
     const p=SIPXALL[i].p, x=pl+bw*i, t=SIPXALL[i].t;
     const y0=pt+ih-(Math.max(0,p)-lo)/rng*ih, y1=pt+ih-(Math.min(0,p)-lo)/rng*ih;
     bars+=`<rect x="${x.toFixed(2)}" y="${Math.min(y0,y1).toFixed(2)}" width="${Math.max(bw*0.92,0.6).toFixed(2)}" height="${(Math.abs(y1-y0)||1).toFixed(2)}" fill="${priceColor(p,lo,hi)}"><title>${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")} ${f2(t)} \u2013 ${p.toFixed(1)} €/MWh</title></rect>`;
-    if(t.getMinutes()===0 && t.getHours()%6===0){
-      const lab=t.getHours()===0?`${t.getDate()}.${t.getMonth()+1}.`:`${t.getHours()}:00`;
-      axis+=`<line x1="${x.toFixed(2)}" y1="${pt}" x2="${x.toFixed(2)}" y2="${pt+ih}" stroke="#1b2330" stroke-width="1"/>`;
-      axis+=`<text x="${x.toFixed(2)}" y="${H-8}" fill="#5a6573" font-size="14" text-anchor="middle" font-family="JetBrains Mono">${lab}</text>`;
+    if(t.getMinutes()===0 && t.getHours()===0){
+      axis+=`<line x1="${x.toFixed(2)}" y1="${pt}" x2="${x.toFixed(2)}" y2="${pt+ih}" stroke="#33404f" stroke-width="1"/>`;
+      const lx=Math.min(pl+iw-2, x+bw*48); // sredina dneva
+      axis+=`<text x="${lx.toFixed(2)}" y="${H-7}" fill="#aeb9c7" font-size="16" font-weight="500" text-anchor="middle" font-family="JetBrains Mono">${f2(t)} ${t.getDate()}.${t.getMonth()+1}.</text>`;
     }
   }
   let nowMark="";
@@ -616,7 +616,7 @@ function drawChartMulti(nowIdx){
     nowMark=`<line x1="${x}" y1="${pt-3}" x2="${x}" y2="${pt+ih}" stroke="#fff" stroke-width="1.5"/>`+
             `<text x="${x}" y="${pt-5}" fill="#fff" font-size="14" text-anchor="middle" font-family="JetBrains Mono">zdaj</text>`; }
   const zeroY=pt+ih-(0-lo)/rng*ih;
-  chart.innerHTML=`<svg viewBox="0 0 ${W} ${H}">${grid}${bars}<line x1="${pl}" y1="${zeroY}" x2="${pl+iw}" y2="${zeroY}" stroke="#3a4452" stroke-width="1"/>${nowMark}${axis}<text x="${pl+iw+5}" y="${pt-2}" fill="#5a6573" font-size="14" font-family="JetBrains Mono">€/MWh</text></svg>`;
+  chart.innerHTML=`<svg viewBox="0 0 ${W} ${H}">${grid}${bars}<line x1="${pl}" y1="${zeroY}" x2="${pl+iw}" y2="${zeroY}" stroke="#3a4452" stroke-width="1"/>${nowMark}${axis}<text x="${pl+iw+5}" y="${pt-2}" fill="#aeb9c7" font-size="14" font-family="JetBrains Mono">€/MWh</text></svg>`;
 }
 function f2(t){ return ["ned","pon","tor","sre","čet","pet","sob"][t.getDay()]; }
 function renderList(nowIdx){
@@ -762,7 +762,7 @@ function fcMiniSVG(rows,lo,hi,nowHr){
     }
     if(r&&r.actual!=null){ const ya=pt+ih-(r.actual-lo)/rng*ih; pts.push(`${(x+bw*0.42).toFixed(1)},${ya.toFixed(1)}`); }
     if(h===nowHr) axis+=`<line x1="${(x+bw*0.42).toFixed(1)}" y1="${pt-2}" x2="${(x+bw*0.42).toFixed(1)}" y2="${pt+ih}" stroke="#fff" stroke-width="1"/>`;
-    if(h%6===0) axis+=`<text x="${(x+bw*0.42).toFixed(1)}" y="${H-2}" fill="#5a6573" font-size="11" text-anchor="middle" font-family="JetBrains Mono">${h}</text>`;
+    if(h%6===0) axis+=`<text x="${(x+bw*0.42).toFixed(1)}" y="${H-2}" fill="#aeb9c7" font-size="11" text-anchor="middle" font-family="JetBrains Mono">${h}</text>`;
   }
   const line=pts.length>1?`<polyline points="${pts.join(' ')}" fill="none" stroke="#fff" stroke-width="1.1" opacity="0.95"/>`:"";
   const zeroY=pt+ih-(0-lo)/rng*ih;

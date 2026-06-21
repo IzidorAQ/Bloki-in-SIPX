@@ -107,11 +107,16 @@
     padding:5px;background:#0f141b}
   .sipxlist::-webkit-scrollbar{width:10px}
   .sipxlist::-webkit-scrollbar-thumb{background:#3a4554;border-radius:5px}
-  .srow{display:grid;grid-template-columns:78px 86px 1fr;gap:12px;align-items:center;padding:7px 10px;border-radius:8px}
+  .srow,.shead{display:grid;grid-template-columns:70px 76px 96px 1fr;gap:10px;align-items:center;padding:7px 10px}
+  .srow{border-radius:8px}
+  .shead{position:sticky;top:0;z-index:3;background:#0f141b;font-family:var(--mono);font-size:12px;line-height:1.2;
+    font-weight:600;color:var(--faint);border-bottom:1px solid var(--line)}
+  .shead div{text-align:right}.shead div:first-child{text-align:left}
   .srow.now{background:#243140}
   .srow .stime{font-family:var(--mono);font-size:16px;color:var(--mut)}
   .srow.now .stime{color:#fff;font-weight:700}
-  .srow .sprice{font-family:var(--mono);font-size:18px;font-weight:700;text-align:right}
+  .srow .sprice{font-family:var(--mono);font-size:17px;font-weight:700;text-align:right}
+  .srow .sfin{font-family:var(--mono);font-size:18px;font-weight:700;text-align:right}
   .srow .sbarwrap{height:22px;display:flex;align-items:center}
   .srow .sbar{height:18px;border-radius:9px;min-width:4px}
 
@@ -401,12 +406,12 @@ function currentSlot(d){
   if(cur.t.getFullYear()!==d.getFullYear()||cur.t.getMonth()!==d.getMonth()||cur.t.getDate()!==d.getDate()) return null;
   return cur.p;
 }
-// končna cena z DDV in dajatvami [c€/kWh] za dani blok
-function allInCkWh(block){
-  if(SIPXnow==null) return null;
-  const din=effDin(SIPXnow), omr=TARIFF[block].en*1000, daj=(CFG.trosarina+CFG.prispevki)*1000;
+// končna cena z DDV in dajatvami [c€/kWh] za poljubno spot ceno in blok
+function allInFor(spot,block){
+  const din=effDin(spot), omr=TARIFF[block].en*1000, daj=(CFG.trosarina+CFG.prispevki)*1000;
   return ((din+omr+daj)*(1+CFG.ddv))/10;
 }
+function allInCkWh(block){ return SIPXnow==null?null:allInFor(SIPXnow,block); }
 function blockWhere(i){
   const m={
     1:"višja sezona, delovni dan: konici 6-12 in 17-20",
@@ -618,17 +623,19 @@ function renderList(nowIdx){
   const list=document.getElementById("sipxList");
   const ps=SIPXALL.map(x=>x.p), mn=Math.min(...ps), mx=Math.max(...ps);
   const lo=Math.min(0,mn), hi=Math.max(mx,1);
-  let html="", lastDay=null;
+  let html='<div class="shead"><div>ura</div><div>SIPX<br>€/MWh</div><div>končna<br>c€/kWh</div><div></div></div>', lastDay=null;
   for(let i=0;i<SIPXALL.length;i++){
     const it=SIPXALL[i], t=it.t, dk=`${t.getDate()}.${t.getMonth()+1}.`;
-    if(dk!==lastDay){ html+=`<div style="padding:8px 8px 3px;font-family:var(--mono);font-size:11px;color:var(--faint)">${f2(t)} ${dk}</div>`; lastDay=dk; }
+    if(dk!==lastDay){ html+=`<div style="padding:9px 8px 3px;font-family:var(--mono);font-size:13px;color:var(--faint)">${f2(t)} ${dk}</div>`; lastDay=dk; }
     const isNow=(i===nowIdx), isPast=(i<nowIdx);
     const w=Math.max(2,((it.p-lo)/((hi-lo)||1))*100);
     const col=isPast?"#39424f":priceColor(it.p,lo,hi);
     const tlab=isNow?"Zdaj":`${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`;
+    const fin=allInFor(it.p, blockAt(t));
     html+=`<div class="srow${isNow?" now":""}"${isNow?' id="sipxNowRow"':''}>`+
       `<div class="stime">${tlab}</div>`+
       `<div class="sprice" style="color:${isPast?'var(--faint)':'var(--ink)'}">${Math.round(it.p)}</div>`+
+      `<div class="sfin" style="color:${isPast?'var(--faint)':'var(--energy)'}">${fin.toFixed(1)}</div>`+
       `<div class="sbarwrap"><div class="sbar" style="width:${w.toFixed(1)}%;background:${col}"></div></div></div>`;
   }
   list.innerHTML=html;

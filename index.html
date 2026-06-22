@@ -488,7 +488,6 @@ function checkPriceAlert(block){
 /* ============================================================
    SIPX DAY-AHEAD  (api.energy-charts.info, cona SI)
    ============================================================ */
-const SEED_SIPX = {"unix_seconds":[1781820000,1781820900,1781821800,1781822700,1781823600,1781824500,1781825400,1781826300,1781827200,1781828100,1781829000,1781829900,1781830800,1781831700,1781832600,1781833500,1781834400,1781835300,1781836200,1781837100,1781838000,1781838900,1781839800,1781840700,1781841600,1781842500,1781843400,1781844300,1781845200,1781846100,1781847000,1781847900,1781848800,1781849700,1781850600,1781851500,1781852400,1781853300,1781854200,1781855100,1781856000,1781856900,1781857800,1781858700,1781859600,1781860500,1781861400,1781862300,1781863200,1781864100,1781865000,1781865900,1781866800,1781867700,1781868600,1781869500,1781870400,1781871300,1781872200,1781873100,1781874000,1781874900,1781875800,1781876700,1781877600,1781878500,1781879400,1781880300,1781881200,1781882100,1781883000,1781883900,1781884800,1781885700,1781886600,1781887500,1781888400,1781889300,1781890200,1781891100,1781892000,1781892900,1781893800,1781894700,1781895600,1781896500,1781897400,1781898300,1781899200,1781900100,1781901000,1781901900,1781902800,1781903700,1781904600,1781905500,1781906400,1781907300,1781908200,1781909100,1781910000,1781910900,1781911800,1781912700,1781913600,1781914500,1781915400,1781916300,1781917200,1781918100,1781919000,1781919900,1781920800,1781921700,1781922600,1781923500,1781924400,1781925300,1781926200,1781927100,1781928000,1781928900,1781929800,1781930700,1781931600,1781932500,1781933400,1781934300,1781935200,1781936100,1781937000,1781937900,1781938800,1781939700,1781940600,1781941500,1781942400,1781943300,1781944200,1781945100,1781946000,1781946900,1781947800,1781948700,1781949600,1781950500,1781951400,1781952300,1781953200,1781954100,1781955000,1781955900,1781956800,1781957700,1781958600,1781959500,1781960400,1781961300,1781962200,1781963100,1781964000,1781964900,1781965800,1781966700,1781967600,1781968500,1781969400,1781970300,1781971200,1781972100,1781973000,1781973900,1781974800,1781975700,1781976600,1781977500,1781978400,1781979300,1781980200,1781981100,1781982000,1781982900,1781983800,1781984700,1781985600,1781986500,1781987400,1781988300,1781989200,1781990100,1781991000,1781991900,1781992800,1781993700,1781994600,1781995500,1781996400,1781997300,1781998200,1781999100,1782000000,1782000900,1782001800,1782002700,1782003600,1782004500,1782005400,1782006300,1782007200,1782008100,1782009000,1782009900,1782010800,1782011700,1782012600,1782013500,1782014400,1782015300,1782016200,1782017100,1782018000,1782018900,1782019800,1782020700,1782021600,1782022500,1782023400,1782024300,1782025200,1782026100,1782027000,1782027900,1782028800,1782029700,1782030600,1782031500,1782032400,1782033300,1782034200,1782035100,1782036000,1782036900,1782037800,1782038700,1782039600,1782040500,1782041400,1782042300,1782043200,1782044100,1782045000,1782045900,1782046800,1782047700,1782048600,1782049500,1782050400,1782051300,1782052200,1782053100,1782054000,1782054900,1782055800,1782056700,1782057600,1782058500,1782059400,1782060300,1782061200,1782062100,1782063000,1782063900,1782064800,1782065700,1782066600,1782067500,1782068400,1782069300,1782070200,1782071100,1782072000,1782072900,1782073800,1782074700,1782075600,1782076500,1782077400,1782078300],"price":[148.23,143.29,139.1,133.73,137.41,131.86,126.43,121.43,131.42,125.12,124.98,124.22,122.7,122.62,121.12,120.56,120.04,121.48,121.27,122,119.77,120.37,123.52,125.07,126.6,132.96,132.28,128.26,136.7,133.64,122.5,105.07,122.25,114.33,106.79,92.88,107.54,80.19,69.93,55.49,68.41,58.61,48.16,33.11,43.05,32.52,21.65,11,21.8,14.01,14.2,9.99,12.97,10.31,9.91,7.63,10.17,13.32,15.58,22.38,18.74,30.2,40.44,59.04,39.75,73.45,83.98,100.4,86.59,108.45,114.74,120.65,129.02,133.86,148.23,155,148.86,162.17,189.07,231.75,173.69,189.16,198.67,205.25,195.68,189.27,177.59,156.9,168.1,159.55,150.05,145.3,148.85,142.52,134.02,126.6,144.08,133.61,124.32,122,123.6,120.16,120.13,120.68,120.55,119.45,117.95,116.45,118.98,117.65,116.9,116,113.88,114.95,115.92,116.79,118.22,117.61,115.22,113.53,118.1,113.05,110.13,99.81,114.3,108.42,98.37,82.6,110.48,93.43,79.8,59.53,76.54,48.37,20.52,4.23,11.79,3.99,0.71,0.01,0,0,0,-0.01,-0.01,-0.01,-0.01,-0.02,-0.01,-0.02,-0.02,-0.02,-0.02,-0.01,-0.01,-0.01,0,0,0,1,0.15,5.11,16.18,53.81,14.43,91.76,115.16,132.22,102.93,119.82,131.49,157.09,130.01,149.51,163.58,192.07,154.29,158.55,168.7,184.59,175.71,170.73,176.08,168.09,177.48,158.81,154.71,145.34,160.2,152.81,143.67,134.21,147.39,139.06,134.05,131.95,133,130.78,128.74,126.9,130.78,127.08,127.32,127.29,126.33,128.03,127.13,128.14,126.42,126.78,124.75,126.5,129.72,124.47,124.12,119.42,124.43,114.83,109.93,97.02,113.72,110,93.94,74.3,100.16,72.11,45.07,21.26,7.27,2.84,0.06,0.42,4.1,1.31,0.04,0,0,0,0,-0.01,0.01,0.02,0.03,0.03,-0.01,-0.01,-0.01,-0.01,-0.01,-0.01,0,0,0,0,0,0.03,0.11,2.05,6.85,43.58,21.33,77.18,100.72,128.97,105.14,114.13,119.34,132.83,122.56,135.89,144.17,147.63,144.68,151.69,157.14,159.61,156.75,154.34,151.16,146.33,153.65,150.54,145.94,139.14,146.29,136.9,133,122.8],"unit":"EUR / MWh"};
 let SIPX_SOURCE="";
 let SIPX={}, SIPXALL=[];   // per-day {m,p}  +  flat sorted [{t,p}]
 async function tryFetchJSON(url){
@@ -505,7 +504,7 @@ async function loadSIPX(){
   if(!SIPXALL.length) box.innerHTML='<div class="ld">Nalagam SIPX…</div>';
   const d=nowLjubljana();
   const fmt=x=>x.toISOString().slice(0,10);
-  const start=new Date(d); start.setDate(d.getDate()-6);
+  const start=new Date(d); start.setDate(d.getDate()-8);
   const end=new Date(d);   end.setDate(d.getDate()+2);
   const target=`https://api.energy-charts.info/price?bzn=SI&start=${fmt(start)}&end=${fmt(end)}`;
   const urls=[
@@ -570,9 +569,7 @@ function renderSIPX(){
   if(!SIPXALL.length){ chart.innerHTML='<div class="ld">Ni podatkov.</div>'; return; }
   const d=nowLjubljana();
   const f=x=>`${x.getDate()}.${x.getMonth()+1}.`;
-  const badge = SIPX_SOURCE==="live"
-    ? `<span style="color:#2fa84f">&#9679; v živo</span>`
-    : `<span style="color:var(--b2)">&#9679; shranjeni vzorec (osveži za žive cene)</span>`;
+  const badge = `<span style="color:#37bd5b">&#9679; v živo</span>`;
   document.getElementById("sipxRange").innerHTML=`${f(SIPXALL[0].t)} \u2013 ${f(SIPXALL[SIPXALL.length-1].t)}${SIPXALL[0].t.getFullYear()} &middot; ${badge}`;
   // statistika za danes
   const tk=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
@@ -704,7 +701,7 @@ async function loadForecast(force){
   // VSE lokacije v ENEM zahtevku (manj klicev -> brez 429)
   const lats=ZONES.map(z=>z.lat).join(","), lons=ZONES.map(z=>z.lon).join(",");
   const r=await tryFetchJSON(`https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}`+
-    `&hourly=temperature_2m,wind_speed_100m,shortwave_radiation&past_days=5&forecast_days=6&timezone=Europe%2FLjubljana`);
+    `&hourly=temperature_2m,wind_speed_100m,shortwave_radiation&past_days=8&forecast_days=6&timezone=Europe%2FLjubljana`);
   if(!r.data){
     const rate=/429/.test(r.err||""), blocked=/Failed to fetch|NetworkError|load failed/i.test(r.err||"");
     fc.innerHTML=`<div class="err">Napoved ni dosegljiva (${r.err}).`+
@@ -740,35 +737,33 @@ function computeForecast(){
     for(const k in tmp) act[k]=tmp[k].reduce((a,b)=>a+b,0)/tmp[k].length;
   }
   const keyOf=f=>{ const [Y,M,D]=f.date.split("-").map(Number); return `${Y}-${M}-${D}-${f.hr}`; };
-  const X=[],Y=[];
-  feat.forEach(f=>{ const p=act[keyOf(f)]; if(p!=null){ X.push([1,f.wind,f.solar,f.demand]); Y.push(p); } });
+  const X=[],Y=[],trainDays=new Set();
+  feat.forEach(f=>{ const p=act[keyOf(f)]; if(p!=null){ X.push([1,f.wind,f.solar,f.demand]); Y.push(p); trainDays.add(f.date); } });
   let beta=null,fit=null;
   if(X.length>=8){ beta=ols(X,Y); if(beta) fit=r2(X,Y,beta); }
   feat.forEach(f=>{ const a=act[keyOf(f)];
     f.actual=a!=null?a:null;
     f.pred=beta?(beta[0]+beta[1]*f.wind+beta[2]*f.solar+beta[3]*f.demand):null;
   });
-  renderForecast(feat,beta,fit,X.length);
+  renderForecast(feat,beta,fit,X.length,[...trainDays].sort());
 }
 function fcMiniSVG(rows,lo,hi,nowHr){
   const W=240,H=72,pl=2,prr=2,pt=5,pb=12,iw=W-pl-prr,ih=H-pt-pb,rng=(hi-lo)||1,bw=iw/24;
-  let bars="",axis="",pts=[];
+  let bars="",axis="";
   for(let h=0;h<24;h++){
     const r=rows.find(x=>x.hr===h), x=pl+bw*h;
-    const v=r?(r.pred!=null?r.pred:r.actual):null;
+    const v=r?(r.actual!=null?r.actual:r.pred):null; // dejanska borzna cena ima prednost pred modelom
     if(v!=null){
       const y0=pt+ih-(Math.max(0,v)-lo)/rng*ih, y1=pt+ih-(Math.min(0,v)-lo)/rng*ih;
       bars+=`<rect x="${x.toFixed(1)}" y="${Math.min(y0,y1).toFixed(1)}" width="${(bw*0.84).toFixed(1)}" height="${(Math.abs(y1-y0)||1).toFixed(1)}" rx="0.7" fill="${priceColor(v,lo,hi)}" opacity="0.9"><title>${h}:00 \u2013 ${(v/10).toFixed(1)} c€/kWh</title></rect>`;
     }
-    if(r&&r.actual!=null){ const ya=pt+ih-(r.actual-lo)/rng*ih; pts.push(`${(x+bw*0.42).toFixed(1)},${ya.toFixed(1)}`); }
     if(h===nowHr) axis+=`<line x1="${(x+bw*0.42).toFixed(1)}" y1="${pt-2}" x2="${(x+bw*0.42).toFixed(1)}" y2="${pt+ih}" stroke="#fff" stroke-width="1"/>`;
     if(h%6===0) axis+=`<text x="${(x+bw*0.42).toFixed(1)}" y="${H-2}" fill="#aeb9c7" font-size="11" text-anchor="middle" font-family="JetBrains Mono">${h}</text>`;
   }
-  const line=pts.length>1?`<polyline points="${pts.join(' ')}" fill="none" stroke="#fff" stroke-width="1.1" opacity="0.95"/>`:"";
   const zeroY=pt+ih-(0-lo)/rng*ih;
-  return `<svg viewBox="0 0 ${W} ${H}"><line x1="${pl}" y1="${zeroY.toFixed(1)}" x2="${pl+iw}" y2="${zeroY.toFixed(1)}" stroke="#3a4452" stroke-width="0.5"/>${bars}${line}${axis}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}"><line x1="${pl}" y1="${zeroY.toFixed(1)}" x2="${pl+iw}" y2="${zeroY.toFixed(1)}" stroke="#3a4452" stroke-width="0.5"/>${bars}${axis}</svg>`;
 }
-function renderForecast(feat,beta,fit,nTrain){
+function renderForecast(feat,beta,fit,nTrain,trainDays){
   const fc=document.getElementById("fc"); fc.innerHTML="";
   const d=nowLjubljana();
   const byDate={}; feat.forEach(f=>{ (byDate[f.date]=byDate[f.date]||[]).push(f); });
@@ -785,26 +780,27 @@ function renderForecast(feat,beta,fit,nTrain){
     const nowHr=isToday?d.getHours():-1;
     const preds=rows.filter(r=>r.pred!=null).map(r=>r.pred);
     const acts=rows.filter(r=>r.actual!=null).map(r=>r.actual);
-    const pavg=preds.length?preds.reduce((a,b)=>a+b,0)/preds.length:null;
-    const aavg=acts.length?acts.reduce((a,b)=>a+b,0)/acts.length:null;
-    const cheapSrc=rows.filter(r=>(r.pred!=null||r.actual!=null));
-    const cheap=cheapSrc.slice().sort((a,b)=>((a.pred!=null?a.pred:a.actual))-((b.pred!=null?b.pred:b.actual)))
+    const mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
+    const full = acts.length >= Math.max(20, rows.length*0.8); // cel dan ima borzne cene
+    const dispVal=r=> r.actual!=null? r.actual : r.pred;
+    const dispAvg = full ? mean(acts) : (preds.length?mean(preds):(acts.length?mean(acts):null));
+    const cheap=rows.filter(r=>dispVal(r)!=null).slice().sort((a,b)=>dispVal(a)-dispVal(b))
       .slice(0,3).map(r=>String(r.hr).padStart(2,"0")).sort();
     const lab=isToday?"danes":(dd.getTime()===todayStart.getTime()+864e5?"jutri":DOW[dd.getDay()].slice(0,3));
-    const hasAct=acts.length>0;
-    const mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
     const windAvg=mean(rows.map(r=>r.wind));
     const windMax=Math.max(...rows.map(r=>r.wind));
     const solarSum=rows.reduce((a,r)=>a+r.solar,0)/1000; // kWh/m² na dan
     const tempAvg=mean(rows.map(r=>r.tmean));
     const free=rows[0].free;
+    const tag = full
+      ? `<span style="font-size:12px;color:#37bd5b;font-family:var(--mono)">borzna cena</span>`
+      : `<span style="font-size:12px;color:var(--b2);font-family:var(--mono)">ocena modela</span>`;
     const el=document.createElement("div"); el.className="fcd"+(isToday?" today":"");
     el.innerHTML=
-      `<div class="hd"><span class="dow">${lab}</span><span class="dt">${String(D).padStart(2,"0")}.${String(M).padStart(2,"0")}.</span></div>`+
+      `<div class="hd"><span class="dow">${lab}</span><span class="dt">${String(D).padStart(2,"0")}.${String(M).padStart(2,"0")}. &middot; ${tag}</span></div>`+
       fcMiniSVG(rows,lo,hi,nowHr)+
       `<div class="ft">`+
-      (pavg!=null?`napoved povpr. <b>${c(pavg)}</b> c€/kWh<br>`:``)+
-      (hasAct?`dejansko ${aavg!=null?`<b>${c(aavg)}</b> c€/kWh `:``}<span style="color:#fff">&#9472;</span><br>`:``)+
+      (dispAvg!=null?`${full?"borzna cena":"napoved"} povpr. <b>${c(dispAvg)}</b> c€/kWh<br>`:``)+
       `najceneje <b class="gd">${cheap.join(", ")}</b></div>`+
       `<div class="drv">`+
         `<span>veter <b>${windAvg.toFixed(1)}</b> m/s <span style="color:var(--faint)">(do ${windMax.toFixed(0)})</span></span>`+
@@ -814,11 +810,14 @@ function renderForecast(feat,beta,fit,nTrain){
       `</div>`;
     fc.appendChild(el);
   });
-  const fitTxt = beta? `Model umerjen na ${nTrain} urah (R² ${fit!=null?fit.toFixed(2):"?"}).` : `Premalo prekrivanja SIPX in vremena za umeritev (na GitHub Pages se naloži več dni cen).`;
+  const dfmt=s=>{ const [Y,M,D]=s.split("-"); return `${+D}.${+M}.`; };
+  const span = (trainDays&&trainDays.length)? ` iz ${trainDays.length} dni (${dfmt(trainDays[0])}\u2013${dfmt(trainDays[trainDays.length-1])})` : "";
+  const fitTxt = beta? `Model umerjen na ${nTrain} urah${span}, R² ${fit!=null?fit.toFixed(2):"?"}.` : `Premalo prekrivanja SIPX in vremena za umeritev (na GitHub Pages se naloži več dni cen).`;
   document.getElementById("fcnote").innerHTML=
-    `Urna napoved iz vremena: večkratna regresija cene na veter (100 m), sončno obsevanje in profil porabe `+
+    `Dnevi z že objavljenimi borznimi cenami (danes in jutri po cca. 13h) prikazujejo dejansko ceno trga, ne napovedi. `+
+    `Za dni naprej je prikazana ocena modela: večkratna regresija cene na veter (100 m), sončno obsevanje in profil porabe `+
     `(nižji in bolj raven ob vikendih in praznikih) v DE, AT, sev. Italiji, HU, HR in SI, uteženo. ${fitTxt} `+
-    `Stolpci so napovedane cene (barva = poceni&#8594;drago), bela črta je dejanski SIPX, kjer obstaja. `+
+    `Stolpci so urne cene (barva = poceni&#8594;drago), bela črta označuje trenutno uro. `+
     `${beta?`Koef.: veter ${beta[1].toFixed(1)}, sonce ${beta[2].toFixed(2)}, poraba ${beta[3].toFixed(0)} €/MWh. `:``}`+
     `Groba ocena, ne tržna napoved. Vir vremena: Open-Meteo.`;
 }
@@ -829,8 +828,7 @@ function renderForecast(feat,beta,fit,nTrain){
 renderCore();
 updateAlertUI();
 setInterval(renderCore,1000); // sekundna ura + preračun bloka + cene + preverjanje praga
-ingestSIPX(SEED_SIPX, true);   // takojšen samodejni prikaz (vzorčne cene)
-loadSIPX();                    // poskus žive osvežitve (prepiše vzorec)
+loadSIPX();                    // naloži žive cene (8-dnevno okno)
 loadForecast();
 setInterval(loadSIPX, 1000*60*15);
 </script>

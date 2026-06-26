@@ -872,24 +872,28 @@ const WX = {
   ]
 };
 const WXVARS=["weather_code","temperature_2m_max","temperature_2m_min","apparent_temperature_max","apparent_temperature_min","precipitation_sum","rain_sum","snowfall_sum","precipitation_hours","wind_speed_10m_max","wind_gusts_10m_max","wind_direction_10m_dominant","shortwave_radiation_sum","sunshine_duration","uv_index_max"];
+const HMODELS=["ecmwf_ifs025","icon_seamless","gfs_seamless","meteofrance_seamless","gem_seamless"]; // urni večmodelni nabor
+const HVARS=["temperature_2m","precipitation","wind_speed_10m","wind_gusts_10m","weather_code","cloud_cover"];
+function mw(id){ const m=WX.models.find(x=>x.id===id); return m?m.w:1; }
 const WDOW=["ned","pon","tor","sre","čet","pet","sob"];
 
 async function loadWeather15(){
   const box=document.getElementById("wx15");
   if(!box.querySelector(".wxd")) box.innerHTML='<div class="ld">Nalagam vremenske modele…</div>';
   const models=WX.models.map(m=>m.id).join(",");
-  const url=`https://api.open-meteo.com/v1/forecast?latitude=${WX.lat}&longitude=${WX.lon}&elevation=${WX.elev}`+
-    `&daily=${WXVARS.join(",")}&models=${models}&forecast_days=16&timezone=Europe%2FLjubljana`;
-  const r=await tryFetchJSON(url);
-  if(!r.data){
-    const rate=/429/.test(r.err||""), blocked=/Failed to fetch|NetworkError|load failed/i.test(r.err||"");
-    box.innerHTML=`<div class="err">Vreme ni dosegljivo (${r.err}).`+
+  const base=`https://api.open-meteo.com/v1/forecast?latitude=${WX.lat}&longitude=${WX.lon}&elevation=${WX.elev}&forecast_days=16&timezone=Europe%2FLjubljana`;
+  const dUrl=`${base}&daily=${WXVARS.join(",")}&models=${models}`;
+  const hUrl=`${base}&hourly=${HVARS.join(",")}&models=${HMODELS.join(",")}`;
+  const [rd,rh]=await Promise.all([tryFetchJSON(dUrl),tryFetchJSON(hUrl)]);
+  if(!rd.data){
+    const rate=/429/.test(rd.err||""), blocked=/Failed to fetch|NetworkError|load failed/i.test(rd.err||"");
+    box.innerHTML=`<div class="err">Vreme ni dosegljivo (${rd.err}).`+
       (rate?` Preveč zahtevkov; ponovni poskus čez 45 s.`:blocked?` Verjetno blokada v predogledu; deluje na GitHub Pages.`:``)+
       ` <button class="tab" onclick="loadWeather15()">Poskusi znova</button></div>`;
     if(rate) setTimeout(loadWeather15,45000);
     return;
   }
-  const d=r.data.daily; if(!d||!d.time){ box.innerHTML='<div class="err">Vreme: nepričakovan odgovor.</div>'; return; }
+  const d=rd.data.daily; if(!d||!d.time){ box.innerHTML='<div class="err">Vreme: nepričakovan odgovor.</div>'; return; }
   const days=[];
   for(let i=0;i<d.time.length;i++){
     const per=[];
@@ -903,8 +907,29 @@ async function loadWeather15(){
     });
     if(per.length) days.push(synthDay(d.time[i],i+1,per));
   }
+  WX._hourly=buildHourly(rh.data&&rh.data.hourly);
   WX._days=days; WX._updated=new Date();
   renderWeather15(days);
+}
+function buildHourly(H){
+  const out={}; if(!H||!H.time) return out;
+  for(let i=0;i<H.time.length;i++){
+    const t=H.time[i], date=t.slice(0,10), hr=+t.slice(11,13);
+    let tw=0,ts=0,tmn=Infinity,tmx=-Infinity, pw=0,psum=0,prain=0, ww=0,wsum=0,gsum=0,gn=0, cl=0,clc=0; const tally={};
+    HMODELS.forEach(id=>{
+      const g=k=>{ const a=H[`${k}_${id}`]; return a?a[i]:null; };
+      const T=g("temperature_2m"); if(T!=null){ const w=mw(id); tw+=w; ts+=w*T; if(T<tmn)tmn=T; if(T>tmx)tmx=T; }
+      const P=g("precipitation"); if(P!=null){ pw++; psum+=P; if(P>=0.1)prain++; }
+      const Wd=g("wind_speed_10m"); if(Wd!=null){ ww++; wsum+=Wd; }
+      const G=g("wind_gusts_10m"); if(G!=null){ gn++; gsum+=G; }
+      const C=g("cloud_cover"); if(C!=null){ cl+=C; clc++; }
+      const wc=g("weather_code"); if(wc!=null) tally[wc]=(tally[wc]||0)+1;
+    });
+    if(tw===0) continue;
+    let wcode=null,b=-1; for(const k in tally) if(tally[k]>b){b=tally[k];wcode=+k;}
+    (out[date]=out[date]||[]).push({h:hr,t:ts/tw,tmin:tmn,tmax:tmx,p:pw?psum/pw:0,pp:pw?prain/pw:0,wind:ww?wsum/ww:null,gust:gn?gsum/gn:null,cloud:clc?cl/clc:null,wc:wcode});
+  }
+  return out;
 }
 function wWeight(baseW,id,lead){
   let f=baseW;
@@ -970,6 +995,28 @@ function wxIcon(c){
   if(cat==="storm") return S(`${cloud}<path d="M25 35 l-6 9 h4.5 l-2.5 7 8.5-10.5 h-4.5 z" fill="#ffd02e"/>`);
   return S(cloud);
 }
+function wxHourlySVG(hrs,isToday,nowHr){
+  hrs=hrs.slice().sort((a,b)=>a.h-b.h);
+  const W=320,H=98,pl=4,prr=4,pt=6,pb=15,iw=W-pl-prr,ih=H-pt-pb,bw=iw/24;
+  let tLo=Infinity,tHi=-Infinity,pMax=0.5;
+  hrs.forEach(o=>{ if(o.tmin<tLo)tLo=o.tmin; if(o.tmax>tHi)tHi=o.tmax; if(o.p>pMax)pMax=o.p; });
+  tLo=Math.floor(tLo-1); tHi=Math.ceil(tHi+1); const tr=(tHi-tLo)||1;
+  const ty=v=>pt+ih-(v-tLo)/tr*ih, xc=h=>pl+bw*h+bw/2;
+  let bars="";
+  hrs.forEach(o=>{ if(o.p>0.02){ const bh=Math.min(ih*0.5,(o.p/pMax)*ih*0.5), op=(0.3+0.6*(o.pp||0)).toFixed(2);
+    bars+=`<rect x="${(pl+bw*o.h+bw*0.15).toFixed(1)}" y="${(pt+ih-bh).toFixed(1)}" width="${(bw*0.7).toFixed(1)}" height="${bh.toFixed(1)}" fill="#4ea0ff" opacity="${op}"><title>${o.h}:00 ${o.p.toFixed(1)} mm (${Math.round((o.pp||0)*100)}%)</title></rect>`; } });
+  let up="",dn="";
+  hrs.forEach(o=>{ up+=`${xc(o.h).toFixed(1)},${ty(o.tmax).toFixed(1)} `; });
+  hrs.slice().reverse().forEach(o=>{ dn+=`${xc(o.h).toFixed(1)},${ty(o.tmin).toFixed(1)} `; });
+  const band=`<polygon points="${up}${dn}" fill="#ff9426" opacity="0.15"/>`;
+  let ln=""; hrs.forEach((o,i)=>{ ln+=`${i?"L":"M"}${xc(o.h).toFixed(1)} ${ty(o.t).toFixed(1)} `; });
+  const line=`<path d="${ln}" fill="none" stroke="#ffb056" stroke-width="2"/>`;
+  let ax=""; [0,6,12,18].forEach(h=>{ ax+=`<text x="${xc(h).toFixed(1)}" y="${H-3}" fill="#aeb9c7" font-size="11" text-anchor="middle" font-family="JetBrains Mono">${h}</text>`; });
+  ax+=`<text x="${pl}" y="${(ty(tHi)+8).toFixed(1)}" fill="#aeb9c7" font-size="10" font-family="JetBrains Mono">${tHi}°</text>`;
+  ax+=`<text x="${pl}" y="${ty(tLo).toFixed(1)}" fill="#aeb9c7" font-size="10" font-family="JetBrains Mono">${tLo}°</text>`;
+  const now=(isToday&&nowHr>=0)?`<line x1="${xc(nowHr).toFixed(1)}" y1="${pt}" x2="${xc(nowHr).toFixed(1)}" y2="${pt+ih}" stroke="#fff" stroke-width="1"/>`:"";
+  return `<svg viewBox="0 0 ${W} ${H}">${bars}${band}${line}${now}${ax}</svg>`;
+}
 function renderWeather15(days){
   const wrap=document.getElementById("wx15"); wrap.innerHTML="";
   const today=nowLjubljana(), tk=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
@@ -981,6 +1028,17 @@ function renderWeather15(days){
     day.per.forEach(p=>{ tbl+=`<tr><td>${p.m.n}</td><td>${r1v(p.tmax)}°</td><td>${r1v(p.tmin)}°</td><td>${p.precip!=null?p.precip.toFixed(1):"-"}</td></tr>`; });
     tbl+='</table>';
     const el=document.createElement("div"); el.className="wxd"+(isToday?" today":"");
+    const hrs=WX._hourly&&WX._hourly[day.dateStr];
+    let hourlyBlock="";
+    if(hrs&&hrs.length){
+      const warm=hrs.reduce((a,b)=>b.t>a.t?b:a), cold=hrs.reduce((a,b)=>b.t<a.t?b:a);
+      const rainy=hrs.filter(o=>o.p>=0.2).map(o=>o.h);
+      const rainTxt=rainy.length?`dež ~${rainy[0]}\u2013${rainy[rainy.length-1]}h`:"brez dežja";
+      hourlyBlock=
+        `<div style="font-size:12px;color:var(--faint);font-family:var(--mono);margin-top:2px">po urah &middot; temp + dež</div>`+
+        wxHourlySVG(hrs,isToday,today.getHours())+
+        `<div style="font-size:13px;color:var(--mut);font-family:var(--mono)">najtopleje <b style="color:var(--ink)">${Math.round(warm.t)}°</b> ob ${warm.h}h &middot; ${rainTxt}</div>`;
+    }
     el.innerHTML=
       `<div class="top"><span class="dow">${isToday?"danes":WDOW[dt.getDay()]}</span><span class="dt">${String(D).padStart(2,"0")}.${String(M).padStart(2,"0")}.</span></div>`+
       `<div class="main">${wxIcon(day.wcode)}<div class="tt"><span class="tmax">${r1(day.tmax)}°</span><span class="tmin">min ${r1(day.tmin)}° &middot; razpon ${r1v(day.tmax&&day.tmax.min)}\u2013${r1v(day.tmax&&day.tmax.max)}°</span></div></div>`+
@@ -990,6 +1048,7 @@ function renderWeather15(days){
         `veter <b>${r1(day.wind)}</b> &middot; sunki <b>${r1(day.gust)}</b> km/h ${compass(day.wdir)}<br>`+
         `sonce <b>${day.sun?(day.sun.mean/3600).toFixed(1):"-"}</b> h &middot; UV <b>${day.uv?day.uv.mean.toFixed(0):"-"}</b>`+
       `</div>`+
+      hourlyBlock+
       `<div class="conf"><span style="color:${ci[1]}">${ci[0]}</span><div class="cbar"><i style="width:${(day.conf+1)*25}%;background:${ci[1]}"></i></div><span style="color:var(--faint)">${day.n} mod.</span></div>`+
       `<div class="method">${methodBand(day.lead)}</div>`+
       `<details><summary>posamezni modeli</summary>${tbl}</details>`;
@@ -1000,7 +1059,10 @@ function renderWeather15(days){
   document.getElementById("wxnote").innerHTML=
     `Vsak dan je sintetiziran iz več modelov (ECMWF IFS in AIFS, NOAA GFS in Google GraphCast, DWD ICON, GEM, ARPEGE/AROME, UKMO, JMA), uteženih po znani uspešnosti in dolžini napovedi. `+
     `Metodologija se z odmikom spreminja: prve dni dobijo večjo težo visokoločljivi modeli (ICON, AROME), v srednjem roku globalni modeli, za zadnje dni pa težišče prevzameta ECMWF in AIFS, prikaz postane ansambelska tendenca. `+
-    `Negotovost (barva in stolpič) izhaja iz razpona temperatur med modeli: večje ujemanje pomeni višjo zanesljivost. Razgrni "posamezni modeli" za surove vrednosti vsakega modela. Vir: Open-Meteo.`;
+    `Negotovost (barva in stolpič) izhaja iz razpona temperatur med modeli: večje ujemanje pomeni višjo zanesljivost. `+
+    `Graf "po urah" prikazuje urni potek temperature (oranžna črta s pasom razpona med modeli) in padavine (modri stolpci, motnost = verjetnost), `+
+    `sintetiziran iz urnega večmodelnega nabora (ECMWF, ICON, GFS, AROME, GEM). `+
+    `Razgrni "posamezni modeli" za surove vrednosti. Vir: Open-Meteo.`;
 }
 
 /* ============================================================

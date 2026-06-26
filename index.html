@@ -134,6 +134,31 @@
   .fcd .drv{display:grid;grid-template-columns:1fr 1fr;gap:5px 12px;margin-top:11px;padding-top:11px;border-top:1px solid var(--line);font-size:14px;color:var(--mut);font-family:var(--mono)}
   .fcd .drv b{color:var(--ink);font-weight:700}
 
+  /* 15-dnevno vreme */
+  .wx15{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+  .wxd{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px}
+  .wxd.today{border-color:var(--energy)}
+  .wxd .top{display:flex;justify-content:space-between;align-items:baseline}
+  .wxd .dow{font-family:var(--display);font-weight:700;font-size:19px}
+  .wxd .dt{font-family:var(--mono);font-size:14px;color:var(--faint)}
+  .wxd .main{display:flex;align-items:center;gap:12px}
+  .wxd .ic{width:48px;height:48px;flex:0 0 auto}
+  .wxd .tt{display:flex;flex-direction:column}
+  .wxd .tmax{font-family:var(--mono);font-size:30px;font-weight:700;line-height:1}
+  .wxd .tmin{font-family:var(--mono);font-size:14px;color:var(--mut);margin-top:3px}
+  .wxd .desc{font-size:14px;color:var(--mut);min-height:1.3em}
+  .wxd .rows{font-family:var(--mono);font-size:14px;color:var(--mut);line-height:1.75}
+  .wxd .rows b{color:var(--ink);font-weight:700}
+  .wxd .conf{display:flex;align-items:center;gap:8px;font-size:13px;font-family:var(--mono);margin-top:2px}
+  .wxd .cbar{flex:1;height:7px;border-radius:4px;background:#33404f;overflow:hidden}
+  .wxd .cbar i{display:block;height:100%;border-radius:4px}
+  .wxd .method{font-size:11.5px;color:var(--faint);font-family:var(--mono);line-height:1.4}
+  .wxd summary{cursor:pointer;color:var(--energy);font-family:var(--mono);font-size:13px}
+  .wxd table{width:100%;border-collapse:collapse;margin-top:6px;font-family:var(--mono);font-size:12px}
+  .wxd td,.wxd th{text-align:right;padding:2px 4px;color:var(--mut)}
+  .wxd th{color:var(--faint);font-weight:500}
+  .wxd td:first-child,.wxd th:first-child{text-align:left;color:var(--ink)}
+
   .note{font-size:15px;color:var(--faint);line-height:1.65;margin-top:14px}
   .err{color:var(--b2);font-family:var(--mono);font-size:16px;padding:13px;background:rgba(242,130,10,.10);
     border:1px solid rgba(242,130,10,.30);border-radius:9px;line-height:1.6}
@@ -227,6 +252,13 @@
       <h2>Napoved tendence cen &middot; po vremenu v regiji</h2>
       <div class="fc" id="fc"><div class="ld">Nalagam vremensko napoved…</div></div>
       <div class="note" id="fcnote"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Vreme Zagrajec &middot; 15 dni &middot; večmodelni ansambel</h2>
+      <div id="wxMeta" class="note" style="margin-top:0;margin-bottom:10px"></div>
+      <div class="wx15" id="wx15"><div class="ld">Nalagam vremenske modele…</div></div>
+      <div class="note" id="wxnote"></div>
     </section>
 
   </div>
@@ -823,6 +855,155 @@ function renderForecast(feat,beta,fit,nTrain,trainDays){
 }
 
 /* ============================================================
+   VREME ZAGRAJEC - 15 dni, večmodelni ansambel
+   ============================================================ */
+const WX = {
+  lat:45.8333, lon:13.7167, elev:295, name:"Zagrajec (Kras)",
+  models:[
+    {id:"ecmwf_ifs025",       n:"ECMWF",       w:1.30},
+    {id:"ecmwf_aifs025",      n:"ECMWF-AIFS",  w:1.20},
+    {id:"gfs_seamless",       n:"GFS",         w:1.00},
+    {id:"gfs_graphcast025",   n:"GraphCast",   w:1.00},
+    {id:"icon_seamless",      n:"ICON",        w:1.10},
+    {id:"gem_seamless",       n:"GEM",         w:0.90},
+    {id:"meteofrance_seamless",n:"ARPEGE/AROME",w:1.00},
+    {id:"ukmo_seamless",      n:"UKMO",        w:1.00},
+    {id:"jma_seamless",       n:"JMA",         w:0.85}
+  ]
+};
+const WXVARS=["weather_code","temperature_2m_max","temperature_2m_min","apparent_temperature_max","apparent_temperature_min","precipitation_sum","rain_sum","snowfall_sum","precipitation_hours","wind_speed_10m_max","wind_gusts_10m_max","wind_direction_10m_dominant","shortwave_radiation_sum","sunshine_duration","uv_index_max"];
+const WDOW=["ned","pon","tor","sre","čet","pet","sob"];
+
+async function loadWeather15(){
+  const box=document.getElementById("wx15");
+  if(!box.querySelector(".wxd")) box.innerHTML='<div class="ld">Nalagam vremenske modele…</div>';
+  const models=WX.models.map(m=>m.id).join(",");
+  const url=`https://api.open-meteo.com/v1/forecast?latitude=${WX.lat}&longitude=${WX.lon}&elevation=${WX.elev}`+
+    `&daily=${WXVARS.join(",")}&models=${models}&forecast_days=16&timezone=Europe%2FLjubljana`;
+  const r=await tryFetchJSON(url);
+  if(!r.data){
+    const rate=/429/.test(r.err||""), blocked=/Failed to fetch|NetworkError|load failed/i.test(r.err||"");
+    box.innerHTML=`<div class="err">Vreme ni dosegljivo (${r.err}).`+
+      (rate?` Preveč zahtevkov; ponovni poskus čez 45 s.`:blocked?` Verjetno blokada v predogledu; deluje na GitHub Pages.`:``)+
+      ` <button class="tab" onclick="loadWeather15()">Poskusi znova</button></div>`;
+    if(rate) setTimeout(loadWeather15,45000);
+    return;
+  }
+  const d=r.data.daily; if(!d||!d.time){ box.innerHTML='<div class="err">Vreme: nepričakovan odgovor.</div>'; return; }
+  const days=[];
+  for(let i=0;i<d.time.length;i++){
+    const per=[];
+    WX.models.forEach(m=>{
+      const g=k=>{ const a=d[`${k}_${m.id}`]; return a?a[i]:null; };
+      const tmax=g("temperature_2m_max"); if(tmax==null) return;
+      per.push({m,tmax,tmin:g("temperature_2m_min"),atmax:g("apparent_temperature_max"),atmin:g("apparent_temperature_min"),
+        wcode:g("weather_code"),precip:g("precipitation_sum"),rain:g("rain_sum"),snow:g("snowfall_sum"),phours:g("precipitation_hours"),
+        wind:g("wind_speed_10m_max"),gust:g("wind_gusts_10m_max"),wdir:g("wind_direction_10m_dominant"),
+        rad:g("shortwave_radiation_sum"),sun:g("sunshine_duration"),uv:g("uv_index_max")});
+    });
+    if(per.length) days.push(synthDay(d.time[i],i+1,per));
+  }
+  WX._days=days; WX._updated=new Date();
+  renderWeather15(days);
+}
+function wWeight(baseW,id,lead){
+  let f=baseW;
+  if(lead<=3){ if(id==="icon_seamless")f+=0.4; if(id==="meteofrance_seamless")f+=0.4; if(id==="ukmo_seamless")f+=0.2; }
+  if(lead>=8){ if(id==="jma_seamless")f-=0.2; if(id==="gem_seamless")f-=0.1; if(id==="ukmo_seamless")f-=0.25; }
+  if(lead>=12){ if(id==="ecmwf_ifs025")f+=0.25; if(id==="ecmwf_aifs025")f+=0.2; }
+  return Math.max(0.1,f);
+}
+function wstat(per,key,lead){
+  let sw=0,sv=0,mn=Infinity,mx=-Infinity,n=0;
+  per.forEach(p=>{ const v=p[key]; if(v==null||isNaN(v))return; const w=wWeight(p.m.w,p.m.id,lead); sw+=w; sv+=w*v; if(v<mn)mn=v; if(v>mx)mx=v; n++; });
+  return n? {mean:sv/sw,min:mn,max:mx,n} : null;
+}
+function synthDay(dateStr,lead,per){
+  const tmax=wstat(per,"tmax",lead),tmin=wstat(per,"tmin",lead),atmax=wstat(per,"atmax",lead),atmin=wstat(per,"atmin",lead);
+  const precip=wstat(per,"precip",lead),wind=wstat(per,"wind",lead),gust=wstat(per,"gust",lead),sun=wstat(per,"sun",lead),uv=wstat(per,"uv",lead),rad=wstat(per,"rad",lead);
+  let pw=0,pp=0; per.forEach(p=>{ if(p.precip==null)return; const w=wWeight(p.m.w,p.m.id,lead); pw+=w; if(p.precip>=0.5)pp+=w; });
+  const precipProb=pw?pp/pw:null;
+  let sx=0,sy=0,dw=0; per.forEach(p=>{ if(p.wdir==null)return; const w=wWeight(p.m.w,p.m.id,lead),a=p.wdir*Math.PI/180; sx+=w*Math.sin(a); sy+=w*Math.cos(a); dw+=w; });
+  const wdir=dw?((Math.atan2(sx,sy)*180/Math.PI)+360)%360:null;
+  const tally={}; per.forEach(p=>{ if(p.wcode==null)return; const w=wWeight(p.m.w,p.m.id,lead); tally[p.wcode]=(tally[p.wcode]||0)+w; });
+  let wcode=null,best=-1; for(const k in tally) if(tally[k]>best){best=tally[k];wcode=+k;}
+  const spread=tmax?(tmax.max-tmax.min):99;
+  let conf=spread<=2?3:spread<=4?2:spread<=6.5?1:0;
+  if((tmax?tmax.n:0)<3) conf=Math.min(conf,1);
+  return {dateStr,lead,per,tmax,tmin,atmax,atmin,precip,precipProb,wind,gust,wdir,sun,uv,rad,wcode,spread,conf,n:tmax?tmax.n:0};
+}
+function compass(deg){ if(deg==null)return"-"; return ["S","SV","V","JV","J","JZ","Z","SZ"][Math.round(deg/45)%8]; }
+function confInfo(c){ return [["zelo nizka","#ff5b60"],["nizka","#ff9426"],["srednja","#ffd02e"],["visoka","#37bd5b"]][c]; }
+function methodBand(lead){
+  if(lead<=3) return "Kratkoročno · visoka ločljivost (ICON, AROME, UKMO + ECMWF)";
+  if(lead<=7) return "Srednjeročno · večmodelni (ECMWF, GFS, ICON, GEM, AI)";
+  if(lead<=11) return "Podaljšano · globalni + AI (ECMWF, AIFS, GFS, GraphCast, GEM)";
+  return "Dolgoročno · ansambelska tendenca (težišče ECMWF/AIFS)";
+}
+function wxCat(c){
+  if(c==null) return "cloud";
+  if(c<=1) return "clear"; if(c===2) return "part"; if(c===3) return "cloud";
+  if(c===45||c===48) return "fog";
+  if(c>=51&&c<=57) return "drizzle";
+  if((c>=61&&c<=67)||(c>=80&&c<=82)) return "rain";
+  if((c>=71&&c<=77)||c===85||c===86) return "snow";
+  if(c>=95) return "storm";
+  return "cloud";
+}
+function wxDesc(c){
+  const m={0:"jasno",1:"pretežno jasno",2:"delno oblačno",3:"oblačno",45:"megla",48:"megla z ivjem",51:"rahlo rosenje",53:"rosenje",55:"močno rosenje",56:"ledeno rosenje",57:"ledeno rosenje",61:"rahel dež",63:"dež",65:"močan dež",66:"ledeni dež",67:"ledeni dež",71:"rahel sneg",73:"sneg",75:"močan sneg",77:"snežna zrna",80:"plohe",81:"plohe",82:"močne plohe",85:"snežne plohe",86:"snežne plohe",95:"nevihte",96:"nevihte s točo",99:"nevihte s točo"};
+  return m[c]!=null?m[c]:"-";
+}
+function wxIcon(c){
+  const cat=wxCat(c);
+  const cloud=`<g fill="#c8d2df"><ellipse cx="18" cy="28" rx="9" ry="7"/><ellipse cx="29" cy="27" rx="10" ry="8"/><ellipse cx="24" cy="23" rx="8" ry="7"/></g>`;
+  let rays=""; for(let i=0;i<8;i++){ const a=i*Math.PI/4; rays+=`<line x1="${24+Math.cos(a)*13}" y1="${24+Math.sin(a)*13}" x2="${24+Math.cos(a)*17}" y2="${24+Math.sin(a)*17}" stroke="#ffd02e" stroke-width="2.4" stroke-linecap="round"/>`; }
+  const sun=`<circle cx="24" cy="24" r="9" fill="#ffd02e"/>${rays}`;
+  const S=s=>`<svg class="ic" viewBox="0 0 48 48">${s}</svg>`;
+  if(cat==="clear") return S(sun);
+  if(cat==="part") return S(`<circle cx="31" cy="18" r="7" fill="#ffd02e"/><g fill="#c8d2df"><ellipse cx="18" cy="30" rx="9" ry="7"/><ellipse cx="29" cy="29" rx="10" ry="8"/><ellipse cx="24" cy="25" rx="8" ry="7"/></g>`);
+  if(cat==="cloud") return S(cloud);
+  if(cat==="fog") return S(`${cloud}<g stroke="#9fabbb" stroke-width="2.4" stroke-linecap="round"><line x1="14" y1="37" x2="34" y2="37"/><line x1="16" y1="42" x2="32" y2="42"/></g>`);
+  if(cat==="drizzle") return S(`${cloud}<g stroke="#4ea0ff" stroke-width="2" stroke-linecap="round"><line x1="20" y1="37" x2="19" y2="40"/><line x1="28" y1="37" x2="27" y2="40"/></g>`);
+  if(cat==="rain") return S(`${cloud}<g stroke="#4ea0ff" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="37" x2="16" y2="43"/><line x1="24" y1="37" x2="22" y2="43"/><line x1="30" y1="37" x2="28" y2="43"/></g>`);
+  if(cat==="snow") return S(`${cloud}<g fill="#cfe6ff"><circle cx="18" cy="40" r="1.8"/><circle cx="24" cy="42" r="1.8"/><circle cx="30" cy="40" r="1.8"/></g>`);
+  if(cat==="storm") return S(`${cloud}<path d="M25 35 l-6 9 h4.5 l-2.5 7 8.5-10.5 h-4.5 z" fill="#ffd02e"/>`);
+  return S(cloud);
+}
+function renderWeather15(days){
+  const wrap=document.getElementById("wx15"); wrap.innerHTML="";
+  const today=nowLjubljana(), tk=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
+  const r1=o=>o==null?"-":Math.round(o.mean), r1v=v=>v==null?"-":Math.round(v);
+  days.forEach(day=>{
+    const [Y,M,D]=day.dateStr.split("-").map(Number), dt=new Date(Y,M-1,D);
+    const isToday=day.dateStr===tk, ci=confInfo(day.conf);
+    let tbl='<table><tr><th>model</th><th>max</th><th>min</th><th>dež</th></tr>';
+    day.per.forEach(p=>{ tbl+=`<tr><td>${p.m.n}</td><td>${r1v(p.tmax)}°</td><td>${r1v(p.tmin)}°</td><td>${p.precip!=null?p.precip.toFixed(1):"-"}</td></tr>`; });
+    tbl+='</table>';
+    const el=document.createElement("div"); el.className="wxd"+(isToday?" today":"");
+    el.innerHTML=
+      `<div class="top"><span class="dow">${isToday?"danes":WDOW[dt.getDay()]}</span><span class="dt">${String(D).padStart(2,"0")}.${String(M).padStart(2,"0")}.</span></div>`+
+      `<div class="main">${wxIcon(day.wcode)}<div class="tt"><span class="tmax">${r1(day.tmax)}°</span><span class="tmin">min ${r1(day.tmin)}° &middot; razpon ${r1v(day.tmax&&day.tmax.min)}\u2013${r1v(day.tmax&&day.tmax.max)}°</span></div></div>`+
+      `<div class="desc">${wxDesc(day.wcode)} &middot; občutek ${r1(day.atmax)}°</div>`+
+      `<div class="rows">`+
+        `dež <b>${day.precip?day.precip.mean.toFixed(1):"0.0"} mm</b> &middot; verjetnost <b>${day.precipProb!=null?Math.round(day.precipProb*100):0} %</b><br>`+
+        `veter <b>${r1(day.wind)}</b> &middot; sunki <b>${r1(day.gust)}</b> km/h ${compass(day.wdir)}<br>`+
+        `sonce <b>${day.sun?(day.sun.mean/3600).toFixed(1):"-"}</b> h &middot; UV <b>${day.uv?day.uv.mean.toFixed(0):"-"}</b>`+
+      `</div>`+
+      `<div class="conf"><span style="color:${ci[1]}">${ci[0]}</span><div class="cbar"><i style="width:${(day.conf+1)*25}%;background:${ci[1]}"></i></div><span style="color:var(--faint)">${day.n} mod.</span></div>`+
+      `<div class="method">${methodBand(day.lead)}</div>`+
+      `<details><summary>posamezni modeli</summary>${tbl}</details>`;
+    wrap.appendChild(el);
+  });
+  const u=WX._updated;
+  document.getElementById("wxMeta").innerHTML=`${WX.name} &middot; ${WX.lat}°N ${WX.lon}°E &middot; ${WX.elev} m &middot; ${WX.models.length} modelov &middot; osveženo ${String(u.getHours()).padStart(2,"0")}:${String(u.getMinutes()).padStart(2,"0")}`;
+  document.getElementById("wxnote").innerHTML=
+    `Vsak dan je sintetiziran iz več modelov (ECMWF IFS in AIFS, NOAA GFS in Google GraphCast, DWD ICON, GEM, ARPEGE/AROME, UKMO, JMA), uteženih po znani uspešnosti in dolžini napovedi. `+
+    `Metodologija se z odmikom spreminja: prve dni dobijo večjo težo visokoločljivi modeli (ICON, AROME), v srednjem roku globalni modeli, za zadnje dni pa težišče prevzameta ECMWF in AIFS, prikaz postane ansambelska tendenca. `+
+    `Negotovost (barva in stolpič) izhaja iz razpona temperatur med modeli: večje ujemanje pomeni višjo zanesljivost. Razgrni "posamezni modeli" za surove vrednosti vsakega modela. Vir: Open-Meteo.`;
+}
+
+/* ============================================================
    ZAGON
    ============================================================ */
 renderCore();
@@ -830,7 +1011,9 @@ updateAlertUI();
 setInterval(renderCore,1000); // sekundna ura + preračun bloka + cene + preverjanje praga
 loadSIPX();                    // naloži žive cene (8-dnevno okno)
 loadForecast();
+loadWeather15();
 setInterval(loadSIPX, 1000*60*15);
+setInterval(loadWeather15, 1000*60*60*3);
 </script>
 </body>
 </html>

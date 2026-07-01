@@ -650,17 +650,16 @@ function drawChartMulti(nowIdx){
 function f2(t){ return ["ned","pon","tor","sre","čet","pet","sob"][t.getDay()]; }
 function renderList(nowIdx){
   const list=document.getElementById("sipxList");
-  const ps=SIPXALL.map(x=>x.p), mn=Math.min(...ps), mx=Math.max(...ps);
-  const lo=Math.min(0,mn), hi=Math.max(mx,1);
+  const fins=SIPXALL.map(x=>allInFor(x.p, blockAt(x.t))); // dejanska cena na rezino
+  const flo=Math.min(...fins), fhi=Math.max(fhiSafe(fins),flo+0.1);
   let html='<div class="shead"><div>ura</div><div>SIPX<br>€/MWh</div><div>končna<br>c€/kWh</div><div></div></div>', lastDay=null;
   for(let i=0;i<SIPXALL.length;i++){
     const it=SIPXALL[i], t=it.t, dk=`${t.getDate()}.${t.getMonth()+1}.`;
     if(dk!==lastDay){ html+=`<div style="padding:9px 8px 3px;font-family:var(--mono);font-size:13px;color:var(--faint)">${f2(t)} ${dk}</div>`; lastDay=dk; }
-    const isNow=(i===nowIdx), isPast=(i<nowIdx);
-    const w=Math.max(2,((it.p-lo)/((hi-lo)||1))*100);
-    const col=isPast?"#39424f":priceColor(it.p,lo,hi);
+    const isNow=(i===nowIdx), isPast=(i<nowIdx), fin=fins[i];
+    const w=Math.max(2,((fin-flo)/((fhi-flo)||1))*100);           // dolžina po dejanski ceni
+    const col=isPast?"#39424f":priceColor(fin,flo,fhi);           // barva po dejanski ceni
     const tlab=isNow?"Zdaj":`${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`;
-    const fin=allInFor(it.p, blockAt(t));
     html+=`<div class="srow${isNow?" now":""}"${isNow?' id="sipxNowRow"':''}>`+
       `<div class="stime">${tlab}</div>`+
       `<div class="sprice" style="color:${isPast?'var(--faint)':'var(--ink)'}">${Math.round(it.p)}</div>`+
@@ -671,6 +670,7 @@ function renderList(nowIdx){
   const nr=document.getElementById("sipxNowRow");
   if(nr) list.scrollTop=Math.max(0,nr.offsetTop-100);
 }
+function fhiSafe(a){ return a.length?Math.max(...a):1; }
 function st(l,v){ return `<div><span class="lab">${l}</span><span class="num">${v}</span></div>`; }
 
 /* ============================================================

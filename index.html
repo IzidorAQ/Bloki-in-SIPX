@@ -237,6 +237,10 @@
     <section class="panel">
       <h2>SIPX day-ahead &middot; borzna cena energije <span id="sipxRange" style="color:var(--faint);font-family:var(--mono);font-size:11px"></span></h2>
       <div class="stats" id="sipxStats"></div>
+      <div class="tabs" id="sipxToggle">
+        <button class="tab on" data-v="td" onclick="setSipxView('td')">Danes in jutri</button>
+        <button class="tab" data-v="multi" onclick="setSipxView('multi')">Zadnji dnevi</button>
+      </div>
       <div class="barwrap" id="sipxChart"><div class="ld">Nalagam…</div></div>
       <div id="sipxList" class="sipxlist"></div>
       <details style="margin-top:12px">
@@ -615,12 +619,31 @@ function renderSIPX(){
       st("ločljivost",today.length>24?"15-min":"urno");
   } else stats.innerHTML="";
   let nowIdx=-1; for(let i=0;i<SIPXALL.length;i++){ if(SIPXALL[i].t<=d) nowIdx=i; else break; }
-  drawChartMulti(nowIdx);
+  drawSipxView();
   renderList(nowIdx);
 }
-function drawChartMulti(nowIdx){
-  const chart=document.getElementById("sipxChart"), N=SIPXALL.length;
-  const ps=SIPXALL.map(x=>x.p), mn=Math.min(...ps), mx=Math.max(...ps);
+let sipxView="td";
+function setSipxView(v){ sipxView=v; drawSipxView(); }
+function drawSipxView(){
+  if(!SIPXALL.length) return;
+  const d=nowLjubljana();
+  let data=SIPXALL;
+  if(sipxView==="td"){
+    const tmr=new Date(d); tmr.setDate(d.getDate()+1);
+    const sd=(a,b)=>a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();
+    data=SIPXALL.filter(x=>sd(x.t,d)||sd(x.t,tmr));
+  }
+  drawChart("sipxChart", data, d);
+  document.querySelectorAll("#sipxToggle .tab").forEach(b=>b.classList.toggle("on", b.dataset.v===sipxView));
+}
+function drawChart(chartId,data,nowT){
+  const chart=document.getElementById(chartId); if(!chart) return;
+  const N=data.length;
+  if(!N){ chart.innerHTML='<div class="ld">Ni podatkov.</div>'; return; }
+  let nowIdx=-1; for(let i=0;i<N;i++){ if(data[i].t<=nowT) nowIdx=i; else break; }
+  const sameDay=(a,b)=>a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();
+  const showNow = nowIdx>=0 && sameDay(data[nowIdx].t,nowT);
+  const ps=data.map(x=>x.p), mn=Math.min(...ps), mx=Math.max(...ps);
   const lo=Math.min(0,mn), hi=Math.max(mx,1), rng=(hi-lo)||1;
   const W=1000,H=240,pl=8,prr=42,pt=16,pb=24, iw=W-pl-prr, ih=H-pt-pb;
   const bw=iw/N;
@@ -631,17 +654,17 @@ function drawChartMulti(nowIdx){
     axis+=`<text x="${pl+iw+5}" y="${y+3}" fill="#aeb9c7" font-size="15" font-family="JetBrains Mono">${v}</text>`;
   }
   for(let i=0;i<N;i++){
-    const p=SIPXALL[i].p, x=pl+bw*i, t=SIPXALL[i].t;
+    const p=data[i].p, x=pl+bw*i, t=data[i].t;
     const y0=pt+ih-(Math.max(0,p)-lo)/rng*ih, y1=pt+ih-(Math.min(0,p)-lo)/rng*ih;
     bars+=`<rect x="${x.toFixed(2)}" y="${Math.min(y0,y1).toFixed(2)}" width="${Math.max(bw*0.92,0.6).toFixed(2)}" height="${(Math.abs(y1-y0)||1).toFixed(2)}" fill="${priceColor(p,lo,hi)}"><title>${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")} ${f2(t)} \u2013 ${p.toFixed(1)} €/MWh</title></rect>`;
     if(t.getMinutes()===0 && t.getHours()===0){
       axis+=`<line x1="${x.toFixed(2)}" y1="${pt}" x2="${x.toFixed(2)}" y2="${pt+ih}" stroke="#33404f" stroke-width="1"/>`;
-      const lx=Math.min(pl+iw-2, x+bw*48); // sredina dneva
+      const lx=Math.min(pl+iw-2, x+bw*48);
       axis+=`<text x="${lx.toFixed(2)}" y="${H-7}" fill="#aeb9c7" font-size="16" font-weight="500" text-anchor="middle" font-family="JetBrains Mono">${f2(t)} ${t.getDate()}.${t.getMonth()+1}.</text>`;
     }
   }
   let nowMark="";
-  if(nowIdx>=0){ const x=(pl+bw*nowIdx+bw/2).toFixed(2);
+  if(showNow){ const x=(pl+bw*nowIdx+bw/2).toFixed(2);
     nowMark=`<line x1="${x}" y1="${pt-3}" x2="${x}" y2="${pt+ih}" stroke="#fff" stroke-width="1.5"/>`+
             `<text x="${x}" y="${pt-5}" fill="#fff" font-size="14" text-anchor="middle" font-family="JetBrains Mono">zdaj</text>`; }
   const zeroY=pt+ih-(0-lo)/rng*ih;

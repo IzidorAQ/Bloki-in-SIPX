@@ -633,10 +633,11 @@ function drawSipxView(){
     const sd=(a,b)=>a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();
     data=SIPXALL.filter(x=>sd(x.t,d)||sd(x.t,tmr));
   }
-  drawChart("sipxChart", data, d);
+  drawChart("sipxChart", data, d, {hours: sipxView==="td"});
   document.querySelectorAll("#sipxToggle .tab").forEach(b=>b.classList.toggle("on", b.dataset.v===sipxView));
 }
-function drawChart(chartId,data,nowT){
+function drawChart(chartId,data,nowT,opts){
+  opts=opts||{};
   const chart=document.getElementById(chartId); if(!chart) return;
   const N=data.length;
   if(!N){ chart.innerHTML='<div class="ld">Ni podatkov.</div>'; return; }
@@ -645,8 +646,9 @@ function drawChart(chartId,data,nowT){
   const showNow = nowIdx>=0 && sameDay(data[nowIdx].t,nowT);
   const ps=data.map(x=>x.p), mn=Math.min(...ps), mx=Math.max(...ps);
   const lo=Math.min(0,mn), hi=Math.max(mx,1), rng=(hi-lo)||1;
-  const W=1000,H=240,pl=8,prr=42,pt=16,pb=24, iw=W-pl-prr, ih=H-pt-pb;
+  const W=1000,H=240,pl=8,prr=42,pt=16,pb=opts.hours?42:24, iw=W-pl-prr, ih=H-pt-pb;
   const bw=iw/N;
+  const dayY=opts.hours?H-4:H-7;
   let bars="",axis="",grid="";
   const ymin=Math.floor(lo/50)*50, ymax=Math.ceil(hi/50)*50;
   for(let v=ymin; v<=ymax; v+=50){ const y=pt+ih-(v-lo)/rng*ih;
@@ -660,7 +662,11 @@ function drawChart(chartId,data,nowT){
     if(t.getMinutes()===0 && t.getHours()===0){
       axis+=`<line x1="${x.toFixed(2)}" y1="${pt}" x2="${x.toFixed(2)}" y2="${pt+ih}" stroke="#33404f" stroke-width="1"/>`;
       const lx=Math.min(pl+iw-2, x+bw*48);
-      axis+=`<text x="${lx.toFixed(2)}" y="${H-7}" fill="#aeb9c7" font-size="16" font-weight="500" text-anchor="middle" font-family="JetBrains Mono">${f2(t)} ${t.getDate()}.${t.getMonth()+1}.</text>`;
+      axis+=`<text x="${lx.toFixed(2)}" y="${dayY}" fill="#aeb9c7" font-size="16" font-weight="500" text-anchor="middle" font-family="JetBrains Mono">${f2(t)} ${t.getDate()}.${t.getMonth()+1}.</text>`;
+    }
+    if(opts.hours && t.getMinutes()===0 && t.getHours()%3===0){
+      axis+=`<line x1="${x.toFixed(2)}" y1="${pt+ih}" x2="${x.toFixed(2)}" y2="${(pt+ih+4).toFixed(2)}" stroke="#5a6573" stroke-width="1"/>`;
+      axis+=`<text x="${x.toFixed(2)}" y="${(pt+ih+16).toFixed(2)}" fill="#aeb9c7" font-size="13" text-anchor="middle" font-family="JetBrains Mono">${t.getHours()}</text>`;
     }
   }
   let nowMark="";
@@ -896,7 +902,7 @@ const WX = {
 };
 const WXVARS=["weather_code","temperature_2m_max","temperature_2m_min","apparent_temperature_max","apparent_temperature_min","precipitation_sum","rain_sum","snowfall_sum","precipitation_hours","wind_speed_10m_max","wind_gusts_10m_max","wind_direction_10m_dominant","shortwave_radiation_sum","sunshine_duration","uv_index_max"];
 const HMODELS=["ecmwf_ifs025","icon_seamless","gfs_seamless","meteofrance_seamless","gem_seamless"]; // urni večmodelni nabor
-const HVARS=["temperature_2m","precipitation","wind_speed_10m","wind_gusts_10m","weather_code","cloud_cover"];
+const HVARS=["temperature_2m","precipitation","wind_speed_10m","wind_gusts_10m","weather_code","cloud_cover","shortwave_radiation"];
 function mw(id){ const m=WX.models.find(x=>x.id===id); return m?m.w:1; }
 const WDOW=["ned","pon","tor","sre","čet","pet","sob"];
 
@@ -938,7 +944,7 @@ function buildHourly(H){
   const out={}; if(!H||!H.time) return out;
   for(let i=0;i<H.time.length;i++){
     const t=H.time[i], date=t.slice(0,10), hr=+t.slice(11,13);
-    let tw=0,ts=0,tmn=Infinity,tmx=-Infinity, pw=0,psum=0,prain=0, ww=0,wsum=0,gsum=0,gn=0, cl=0,clc=0; const tally={};
+    let tw=0,ts=0,tmn=Infinity,tmx=-Infinity, pw=0,psum=0,prain=0, ww=0,wsum=0,gsum=0,gn=0, cl=0,clc=0, rw=0,rs=0; const tally={};
     HMODELS.forEach(id=>{
       const g=k=>{ const a=H[`${k}_${id}`]; return a?a[i]:null; };
       const T=g("temperature_2m"); if(T!=null){ const w=mw(id); tw+=w; ts+=w*T; if(T<tmn)tmn=T; if(T>tmx)tmx=T; }
@@ -946,11 +952,12 @@ function buildHourly(H){
       const Wd=g("wind_speed_10m"); if(Wd!=null){ ww++; wsum+=Wd; }
       const G=g("wind_gusts_10m"); if(G!=null){ gn++; gsum+=G; }
       const C=g("cloud_cover"); if(C!=null){ cl+=C; clc++; }
+      const R=g("shortwave_radiation"); if(R!=null){ const w=mw(id); rw+=w; rs+=w*R; }
       const wc=g("weather_code"); if(wc!=null) tally[wc]=(tally[wc]||0)+1;
     });
     if(tw===0) continue;
     let wcode=null,b=-1; for(const k in tally) if(tally[k]>b){b=tally[k];wcode=+k;}
-    (out[date]=out[date]||[]).push({h:hr,t:ts/tw,tmin:tmn,tmax:tmx,p:pw?psum/pw:0,pp:pw?prain/pw:0,wind:ww?wsum/ww:null,gust:gn?gsum/gn:null,cloud:clc?cl/clc:null,wc:wcode});
+    (out[date]=out[date]||[]).push({h:hr,t:ts/tw,tmin:tmn,tmax:tmx,p:pw?psum/pw:0,pp:pw?prain/pw:0,wind:ww?wsum/ww:null,gust:gn?gsum/gn:null,cloud:clc?cl/clc:null,rad:rw?rs/rw:null,wc:wcode});
   }
   return out;
 }
@@ -1040,6 +1047,21 @@ function wxHourlySVG(hrs,isToday,nowHr){
   const now=(isToday&&nowHr>=0)?`<line x1="${xc(nowHr).toFixed(1)}" y1="${pt}" x2="${xc(nowHr).toFixed(1)}" y2="${pt+ih}" stroke="#fff" stroke-width="1"/>`:"";
   return `<svg viewBox="0 0 ${W} ${H}">${bars}${band}${line}${now}${ax}</svg>`;
 }
+function wxSolarSVG(hrs){
+  hrs=hrs.slice().sort((a,b)=>a.h-b.h);
+  const W=320,H=76,pl=4,prr=4,pt=8,pb=15,iw=W-pl-prr,ih=H-pt-pb,bw=iw/24;
+  const withR=hrs.filter(o=>o.rad!=null);
+  let rmax=0; withR.forEach(o=>{ if(o.rad>rmax)rmax=o.rad; }); rmax=Math.max(rmax,100);
+  const xc=h=>pl+bw*h+bw/2, ry=v=>pt+ih-(v/rmax)*ih;
+  let pts=""; withR.forEach(o=>{ pts+=`${xc(o.h).toFixed(1)},${ry(o.rad).toFixed(1)} `; });
+  let poly="";
+  if(withR.length){ const x0=xc(withR[0].h),x1=xc(withR[withR.length-1].h);
+    poly=`<polygon points="${x0.toFixed(1)},${(pt+ih).toFixed(1)} ${pts}${x1.toFixed(1)},${(pt+ih).toFixed(1)}" fill="#ffd02e" opacity="0.22"/>`; }
+  const line=`<polyline points="${pts}" fill="none" stroke="#ffd02e" stroke-width="2"/>`;
+  let ax=""; [0,6,12,18].forEach(h=>{ ax+=`<text x="${xc(h).toFixed(1)}" y="${H-3}" fill="#aeb9c7" font-size="11" text-anchor="middle" font-family="JetBrains Mono">${h}</text>`; });
+  ax+=`<text x="${pl}" y="${(pt+7).toFixed(1)}" fill="#aeb9c7" font-size="10" font-family="JetBrains Mono">${Math.round(rmax)}</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}">${poly}${line}${ax}</svg>`;
+}
 function renderWeather15(days){
   const wrap=document.getElementById("wx15"); wrap.innerHTML="";
   const today=nowLjubljana(), tk=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
@@ -1061,6 +1083,13 @@ function renderWeather15(days){
         `<div style="font-size:12px;color:var(--faint);font-family:var(--mono);margin-top:2px">po urah &middot; temp + dež</div>`+
         wxHourlySVG(hrs,isToday,today.getHours())+
         `<div style="font-size:13px;color:var(--mut);font-family:var(--mono)">najtopleje <b style="color:var(--ink)">${Math.round(warm.t)}°</b> ob ${warm.h}h &middot; ${rainTxt}</div>`;
+      if(hrs.some(o=>o.rad!=null)){
+        const pk=hrs.reduce((a,b)=>((b.rad||0)>(a.rad||0)?b:a));
+        hourlyBlock+=
+          `<div style="font-size:12px;color:var(--faint);font-family:var(--mono);margin-top:6px">sončno sevanje &middot; W/m²</div>`+
+          wxSolarSVG(hrs)+
+          `<div style="font-size:13px;color:var(--mut);font-family:var(--mono)">vrh <b style="color:var(--ink)">${Math.round(pk.rad||0)}</b> W/m² ob ${pk.h}h</div>`;
+      }
     }
     el.innerHTML=
       `<div class="top"><span class="dow">${isToday?"danes":WDOW[dt.getDay()]}</span><span class="dt">${String(D).padStart(2,"0")}.${String(M).padStart(2,"0")}.</span></div>`+
@@ -1085,6 +1114,7 @@ function renderWeather15(days){
     `Negotovost (barva in stolpič) izhaja iz razpona temperatur med modeli: večje ujemanje pomeni višjo zanesljivost. `+
     `Graf "po urah" prikazuje urni potek temperature (oranžna črta s pasom razpona med modeli) in padavine (modri stolpci, motnost = verjetnost), `+
     `sintetiziran iz urnega večmodelnega nabora (ECMWF, ICON, GFS, AROME, GEM). `+
+    `Graf sončnega sevanja prikazuje urni globalni obsev (GHI, W/m²), uporaben za oceno pridelka sončne elektrarne. `+
     `Razgrni "posamezni modeli" za surove vrednosti. Vir: Open-Meteo.`;
 }
 

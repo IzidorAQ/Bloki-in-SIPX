@@ -1047,22 +1047,30 @@ function wxHourlySVG(hrs,isToday,nowHr){
   const now=(isToday&&nowHr>=0)?`<line x1="${xc(nowHr).toFixed(1)}" y1="${pt}" x2="${xc(nowHr).toFixed(1)}" y2="${pt+ih}" stroke="#fff" stroke-width="1"/>`:"";
   return `<svg viewBox="0 0 ${W} ${H}">${bars}${band}${line}${now}${ax}</svg>`;
 }
-function wxSolarSVG(hrs){
+function wxSolarSVG(hrs,avgRad){
   hrs=hrs.slice().sort((a,b)=>a.h-b.h);
   const W=320,H=76,pl=4,prr=4,pt=8,pb=15,iw=W-pl-prr,ih=H-pt-pb,bw=iw/24;
   const withR=hrs.filter(o=>o.rad!=null);
-  let rmax=0; withR.forEach(o=>{ if(o.rad>rmax)rmax=o.rad; }); rmax=Math.max(rmax,100);
+  let rmax=0; withR.forEach(o=>{ if(o.rad>rmax)rmax=o.rad; });
+  if(avgRad) avgRad.forEach(v=>{ if(v!=null&&v>rmax)rmax=v; });
+  rmax=Math.max(rmax,100);
   const xc=h=>pl+bw*h+bw/2, ry=v=>pt+ih-(v/rmax)*ih;
   let pts=""; withR.forEach(o=>{ pts+=`${xc(o.h).toFixed(1)},${ry(o.rad).toFixed(1)} `; });
   let poly="";
   if(withR.length){ const x0=xc(withR[0].h),x1=xc(withR[withR.length-1].h);
     poly=`<polygon points="${x0.toFixed(1)},${(pt+ih).toFixed(1)} ${pts}${x1.toFixed(1)},${(pt+ih).toFixed(1)}" fill="#ffd02e" opacity="0.22"/>`; }
   const line=`<polyline points="${pts}" fill="none" stroke="#ffd02e" stroke-width="2"/>`;
+  let avg="";
+  if(avgRad){ let ap=""; for(let h=0;h<24;h++) if(avgRad[h]!=null) ap+=`${xc(h).toFixed(1)},${ry(avgRad[h]).toFixed(1)} `;
+    if(ap) avg=`<polyline points="${ap}" fill="none" stroke="#9fabbb" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.9"/>`; }
   let ax=""; [0,6,12,18].forEach(h=>{ ax+=`<text x="${xc(h).toFixed(1)}" y="${H-3}" fill="#aeb9c7" font-size="11" text-anchor="middle" font-family="JetBrains Mono">${h}</text>`; });
   ax+=`<text x="${pl}" y="${(pt+7).toFixed(1)}" fill="#aeb9c7" font-size="10" font-family="JetBrains Mono">${Math.round(rmax)}</text>`;
-  return `<svg viewBox="0 0 ${W} ${H}">${poly}${line}${ax}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}">${poly}${avg}${line}${ax}</svg>`;
 }
 function renderWeather15(days){
+  const avgRad=(()=>{ const s=new Array(24).fill(0), c=new Array(24).fill(0);
+    if(WX._hourly) Object.values(WX._hourly).forEach(arr=>arr.forEach(o=>{ if(o.rad!=null){ s[o.h]+=o.rad; c[o.h]++; } }));
+    return s.map((v,h)=>c[h]?v/c[h]:null); })();
   const wrap=document.getElementById("wx15"); wrap.innerHTML="";
   const today=nowLjubljana(), tk=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
   const r1=o=>o==null?"-":Math.round(o.mean), r1v=v=>v==null?"-":Math.round(v);
@@ -1086,8 +1094,8 @@ function renderWeather15(days){
       if(hrs.some(o=>o.rad!=null)){
         const pk=hrs.reduce((a,b)=>((b.rad||0)>(a.rad||0)?b:a));
         hourlyBlock+=
-          `<div style="font-size:12px;color:var(--faint);font-family:var(--mono);margin-top:6px">sončno sevanje &middot; W/m²</div>`+
-          wxSolarSVG(hrs)+
+          `<div style="font-size:12px;color:var(--faint);font-family:var(--mono);margin-top:6px">sončno sevanje &middot; W/m² <span style="color:#9fabbb">(črtkano = 15-dnevno urno povpr.)</span></div>`+
+          wxSolarSVG(hrs,avgRad)+
           `<div style="font-size:13px;color:var(--mut);font-family:var(--mono)">vrh <b style="color:var(--ink)">${Math.round(pk.rad||0)}</b> W/m² ob ${pk.h}h</div>`;
       }
     }

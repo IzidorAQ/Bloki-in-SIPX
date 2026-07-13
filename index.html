@@ -53,6 +53,15 @@
   .nextbar{margin-top:18px;padding-top:16px;border-top:1px solid var(--line);
     display:flex;gap:20px;flex-wrap:wrap;font-size:17px;color:var(--mut)}
   .nextbar .num{color:var(--ink);font-weight:700}
+  .b27{margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    background:#151d29;border:1px dashed #3d4d63;border-radius:10px;padding:9px 12px}
+  .b27 .lb{font-size:14px;color:var(--faint);font-family:var(--mono)}
+  .b27 .bx{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+    font-family:var(--display);font-weight:700;font-size:19px;color:#0d1014}
+  .b27 .tx{font-size:14px;color:var(--mut)}
+  .b27 .tx b{color:var(--ink);font-weight:700}
+  .striplab{font-size:14px;color:var(--mut);font-family:var(--mono);margin:16px 0 5px}
+  .striplab span{color:var(--faint)}
 
   /* DAY STRIP */
   .strip{display:flex;height:46px;border-radius:9px;overflow:hidden;border:1px solid var(--line)}
@@ -194,9 +203,11 @@
           <div class="name" id="blkName">Nalagam…</div>
           <div class="ctx" id="blkCtx"></div>
           <div class="chips" id="chips"></div>
+          <div id="b27box" class="b27"></div>
         </div>
       </div>
       <div class="nextbar" id="nextbar"></div>
+      <div class="note" id="schednote"></div>
     </section>
 
     <!-- DAY STRIP -->
@@ -204,6 +215,11 @@
       <h2>Potek blokov danes</h2>
       <div class="strip" id="strip"></div>
       <div class="ticks" id="ticks"></div>
+      <div id="strip27wrap">
+        <div class="striplab">Po pravilih 2027 <span>(za špice moči)</span></div>
+        <div class="strip" id="strip27"></div>
+        <div class="ticks" id="ticks27"></div>
+      </div>
     </section>
 
     <!-- ENERGY NOW -->
@@ -301,12 +317,52 @@ const DARKTXT = {3:true,4:true}; // bloki s svetlim ozadjem -> temno besedilo na
    Vir: Akt o spremembah in dopolnitvah Akta o metodologiji za obračunavanje omrežnine
    (Uradni list RS, št. 76/25, Priloga 2, 3. poglavje). Vse štiri vrste dneva so URADNE.
    Vsak vnos: [začetna ura, končna ura, blok].                                              */
-const SCHED = {
+// SEDANJI urnik (velja do 31.12.2026): visoka obremenitev 7-14 in 16-20,
+// srednja 6-7, 14-16, 20-22, nizka 22-6. Vir: Agencija za energijo.
+const SCHED_2026 = {
+  "visoka|delovni": [[0,6,3],[6,7,2],[7,14,1],[14,16,2],[16,20,1],[20,22,2],[22,24,3]],
+  "visoka|prost":   [[0,6,4],[6,7,3],[7,14,2],[14,16,3],[16,20,2],[20,22,3],[22,24,4]],
+  "nizka|delovni":  [[0,6,4],[6,7,3],[7,14,2],[14,16,3],[16,20,2],[20,22,3],[22,24,4]],
+  "nizka|prost":    [[0,6,5],[6,7,4],[7,14,3],[14,16,4],[16,20,3],[20,22,4],[22,24,5]]
+};
+// NOVI urnik, velja od 1.1.2027 (Ur.l. RS 76/2025)
+const SCHED_2027 = {
   "visoka|delovni": [[0,6,3],[6,12,1],[12,17,2],[17,20,1],[20,22,2],[22,24,3]],
   "visoka|prost":   [[0,6,4],[6,12,3],[12,17,4],[17,22,3],[22,24,4]],
   "nizka|delovni":  [[0,6,5],[6,12,3],[12,17,4],[17,22,3],[22,24,5]],
   "nizka|prost":    [[0,6,5],[6,12,4],[12,17,5],[17,22,4],[22,24,5]]
 };
+function schedSet(d){ return d.getFullYear()>=2027 ? SCHED_2027 : SCHED_2026; }
+// blok po izbranem urniku (za primerjavo sedanjih pravil in pravil 2027)
+function schedForSet(d,SC){ return SC[season(d)+"|"+dayType(d)]; }
+function blockAtSet(d,SC){
+  const h=d.getHours()+d.getMinutes()/60;
+  for(const [s,e,b] of schedForSet(d,SC)) if(h>=s&&h<e) return b;
+  return schedForSet(d,SC)[0][2];
+}
+// nariše trak blokov + mejne ure v dana elementa
+function drawStrip(stripId,ticksId,segs,h){
+  const strip=document.getElementById(stripId); if(!strip) return;
+  strip.innerHTML="";
+  for(const [s,e,bl] of segs){
+    const seg=document.createElement("div");
+    seg.className="seg"+((h>=s&&h<e)?" now":"");
+    seg.style.flex=(e-s); seg.style.background=COL[bl];
+    seg.style.color=DARKTXT[bl]?"#0d1014":"#fff";
+    seg.textContent=(e-s)>=2?bl:"";
+    seg.title=`${s}:00-${e}:00 \u00b7 blok ${bl}`;
+    strip.appendChild(seg);
+  }
+  const ticks=document.getElementById(ticksId); if(!ticks) return;
+  ticks.innerHTML="";
+  [segs[0][0],...segs.map(x=>x[1])].forEach(hr=>{
+    const cls=hr===0?"l":(hr===24?"r":"c");
+    const sp=document.createElement("span");
+    sp.className="tk "+cls; sp.style.left=(hr/24*100)+"%";
+    sp.innerHTML=`<i></i>${hr}`;
+    ticks.appendChild(sp);
+  });
+}
 const CONFIRMED = {"visoka|delovni":true,"visoka|prost":true,"nizka|delovni":true,"nizka|prost":true};
 
 /* ============================================================
@@ -334,7 +390,7 @@ function isHoliday(d){
 }
 function dayType(d){ const w=d.getDay(); return (w===0||w===6||isHoliday(d))?"prost":"delovni"; }
 function season(d){ const m=d.getMonth()+1; return (m===11||m===12||m===1||m===2)?"visoka":"nizka"; }
-function schedFor(d){ return SCHED[season(d)+"|"+dayType(d)]; }
+function schedFor(d){ return schedSet(d)[season(d)+"|"+dayType(d)]; }
 function blockAt(d){
   const h=d.getHours()+d.getMinutes()/60;
   for(const [s,e,b] of schedFor(d)) if(h>=s&&h<e) return b;
@@ -376,8 +432,27 @@ function renderCore(){
     `<span class="chip">moč <b>${moc.toFixed(5)} €/kW/mes</b>${disc1?` <span style="color:var(--b4)">(${Math.round(b1Mult(d)*100)} %)</span>`:""}</span>`+
     `<span class="chip">energija <b>${TARIFF[b].en.toFixed(5)} €/kWh</b></span>`+
     `<span class="chip">${CONFIRMED[sez+"|"+dt]?"urnik: Ur. l. 76/25":"urnik ocena"}</span>`;
+  // blok po pravilih 2027 (za špice moči, ki določajo dogovorjeno moč 2027)
+  const h=d.getHours()+d.getMinutes()/60;
+  const b27box=document.getElementById("b27box");
+  if(b27box){
+    if(d.getFullYear()>=2027){ b27box.style.display="none"; }
+    else {
+      const b27=blockAtSet(d,SCHED_2027);
+      const s27=schedForSet(d,SCHED_2027);
+      let n27=null,nh27=null;
+      for(const [s,e,bl] of s27) if(s>h){ n27=bl; nh27=s; break; }
+      b27box.style.display="flex";
+      b27box.innerHTML=
+        `<span class="lb">po pravilih 2027</span>`+
+        `<span class="bx" style="background:${COL[b27]};color:${DARKTXT[b27]?"#0d1014":"#fff"}">${b27}</span>`+
+        `<span class="tx">moč <b>${mocFor(b27,new Date(2027,d.getMonth(),d.getDate())).toFixed(5)} €/kW</b>`+
+        (n27!==null?` &middot; do <b>${String(nh27).padStart(2,"0")}:00</b>`:` &middot; do polnoči`)+
+        ` &middot; <span style="color:var(--faint)">konice zdaj določajo dogovorjeno moč 2027</span></span>`;
+    }
+  }
   // next change
-  const h=d.getHours()+d.getMinutes()/60; let nb=null,nh=null;
+  let nb=null,nh=null;
   for(const [s,e,bl] of schedFor(d)) if(s>h){ nb=bl; nh=s; break; }
   let nbar="";
   if(nb!==null){
@@ -389,28 +464,19 @@ function renderCore(){
   nbar+=`<span>Danes nastopijo bloki: ${todayBlocks.map(x=>`<span class="num" style="color:${COL[x]}">${x}</span>`).join(" ")}</span>`;
   document.getElementById("nextbar").innerHTML=nbar;
 
-  // strip
-  const strip=document.getElementById("strip"); strip.innerHTML="";
-  for(const [s,e,bl] of schedFor(d)){
-    const seg=document.createElement("div");
-    seg.className="seg"+((h>=s&&h<e)?" now":"");
-    seg.style.flex=(e-s); seg.style.background=COL[bl];
-    seg.style.color=DARKTXT[bl]?"#0d1014":"#fff";
-    seg.textContent=(e-s)>=2?bl:"";
-    seg.title=`${s}:00-${e}:00 \u00b7 blok ${bl}`;
-    strip.appendChild(seg);
+  // strip (veljavni urnik) + strip po pravilih 2027
+  drawStrip("strip","ticks",schedFor(d),h);
+  const w27=document.getElementById("strip27wrap");
+  if(w27){
+    if(d.getFullYear()>=2027){ w27.style.display="none"; }
+    else { w27.style.display="block"; drawStrip("strip27","ticks27",schedForSet(d,SCHED_2027),h); }
   }
   // ticks samo na mejnih urah (prehodi blokov)
-  const segs=schedFor(d);
-  const bounds=[segs[0][0],...segs.map(x=>x[1])];
-  const ticks=document.getElementById("ticks"); ticks.innerHTML="";
-  bounds.forEach(hr=>{
-    const cls=hr===0?"l":(hr===24?"r":"c");
-    const sp=document.createElement("span");
-    sp.className="tk "+cls; sp.style.left=(hr/24*100)+"%";
-    sp.innerHTML=`<i></i>${hr}`;
-    ticks.appendChild(sp);
-  });
+  const sn=document.getElementById("schednote");
+  if(sn) sn.innerHTML = d.getFullYear()>=2027
+    ? `Velja <b>novi urnik blokov</b> (od 1.1.2027): visoka obremenitev 6-12 in 17-20.`
+    : `Velja <b>sedanji urnik blokov</b> (do 31.12.2026): visoka obremenitev 7-14 in 16-20, srednja 6-7, 14-16 in 20-22, nizka 22-6. `+
+      `Spodaj je prikazan tudi blok po <b>pravilih 2027</b>, ker konice moči v letu 2026 določajo tvojo dogovorjeno moč za 2027.`;
 
   // ladder
   const lad=document.getElementById("ladder"); lad.innerHTML="";

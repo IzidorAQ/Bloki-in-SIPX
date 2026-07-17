@@ -257,6 +257,10 @@
         <button class="tab on" data-v="td" onclick="setSipxView('td')">Danes in jutri</button>
         <button class="tab" data-v="multi" onclick="setSipxView('multi')">Zadnji dnevi</button>
       </div>
+      <div class="tabs" id="resToggle" style="margin-top:2px">
+        <button class="tab on" data-r="15min" onclick="setPriceRes('15min')">15-min (trg)</button>
+        <button class="tab" data-r="hourly" onclick="setPriceRes('hourly')">urno (kot GEN-I)</button>
+      </div>
       <div class="barwrap" id="sipxChart"><div class="ld">Nalagam…</div></div>
       <div id="sipxList" class="sipxlist"></div>
       <details style="margin-top:12px">
@@ -502,8 +506,8 @@ function renderCore(){
 }
 // cena trenutne 15-min rezine iz naloženih podatkov (brez novega klica), le za današnji dan
 function currentSlot(d){
-  if(!SIPXALL.length) return null;
-  let cur=null; for(const pt of SIPXALL){ if(pt.t<=d) cur=pt; else break; }
+  if(!SIPXVIEW.length) return null;
+  let cur=null; for(const pt of SIPXVIEW){ if(pt.t<=d) cur=pt; else break; }
   if(!cur) return null;
   if(cur.t.getFullYear()!==d.getFullYear()||cur.t.getMonth()!==d.getMonth()||cur.t.getDate()!==d.getDate()) return null;
   return cur.p;
@@ -528,7 +532,7 @@ function blockWhere(i){
 /* ============================================================
    CENA ENERGIJE ZDAJ
    ============================================================ */
-function effDin(spot){ return Math.min(spot + CFG.dinMarkup, CFG.dinCap); } // €/MWh
+function effDin(spot){ return Math.min(spot, CFG.dinCap) + CFG.dinMarkup; } // €/MWh: kapica velja za energijo, pribitek se prišteje nad njo
 function renderEnergyNow(block,d){
   const el=document.getElementById("enow");
   if(SIPXnow===null){ el.innerHTML='<div class="ld">SIPX trenutno ni na voljo.</div>'; return; }
@@ -591,7 +595,19 @@ function checkPriceAlert(block){
    SIPX DAY-AHEAD  (api.energy-charts.info, cona SI)
    ============================================================ */
 let SIPX_SOURCE="";
-let SIPX={}, SIPXALL=[];   // per-day {m,p}  +  flat sorted [{t,p}]
+let SIPX={}, SIPXALL=[], SIPXVIEW=[], priceRes="15min";   // SIPXALL surovi 15-min; SIPXVIEW prikaz (15-min ali urno izravnano)
+// urno povprečje (aritmetično, kakor GEN-I): vsaka 15-min rezina dobi ceno = povprečje svoje ure
+function hourlyAvg(arr){
+  const g={}; arr.forEach(x=>{ const k=`${x.t.getFullYear()}-${x.t.getMonth()}-${x.t.getDate()}-${x.t.getHours()}`; (g[k]=g[k]||[]).push(x.p); });
+  const m={}; for(const k in g) m[k]=g[k].reduce((a,b)=>a+b,0)/g[k].length;
+  return arr.map(x=>({t:x.t, p:m[`${x.t.getFullYear()}-${x.t.getMonth()}-${x.t.getDate()}-${x.t.getHours()}`]}));
+}
+function applyRes(){ SIPXVIEW = priceRes==="hourly" ? hourlyAvg(SIPXALL) : SIPXALL; }
+function setPriceRes(r){
+  priceRes=r; applyRes();
+  document.querySelectorAll("#resToggle .tab").forEach(b=>b.classList.toggle("on",b.dataset.r===r));
+  renderSIPX(); renderCore();
+}
 async function tryFetchJSON(url){
   const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),12000);
   try{
@@ -649,8 +665,9 @@ function ingestSIPX(j, isSeed){
     SIPXALL.push({t,p:pr[i]});
   }
   SIPXALL.sort((a,b)=>a.t-b.t);
+  applyRes();
   const d=nowLjubljana();
-  let cur=null; for(const pt of SIPXALL){ if(pt.t<=d) cur=pt; else break; }
+  let cur=null; for(const pt of SIPXVIEW){ if(pt.t<=d) cur=pt; else break; }
   SIPXnow = cur?cur.p:null;
   renderCore();
   renderSIPX();
@@ -668,36 +685,36 @@ function priceColor(p,lo,hi){
 }
 function renderSIPX(){
   const chart=document.getElementById("sipxChart"), stats=document.getElementById("sipxStats");
-  if(!SIPXALL.length){ chart.innerHTML='<div class="ld">Ni podatkov.</div>'; return; }
+  if(!SIPXVIEW.length){ chart.innerHTML='<div class="ld">Ni podatkov.</div>'; return; }
   const d=nowLjubljana();
   const f=x=>`${x.getDate()}.${x.getMonth()+1}.`;
   const badge = `<span style="color:#37bd5b">&#9679; v živo</span>`;
-  document.getElementById("sipxRange").innerHTML=`${f(SIPXALL[0].t)} \u2013 ${f(SIPXALL[SIPXALL.length-1].t)}${SIPXALL[0].t.getFullYear()} &middot; ${badge}`;
-  // statistika za danes
-  const tk=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-  const today=(SIPX[tk]||[]);
+  document.getElementById("sipxRange").innerHTML=`${f(SIPXVIEW[0].t)} \u2013 ${f(SIPXVIEW[SIPXVIEW.length-1].t)}${SIPXVIEW[0].t.getFullYear()} &middot; ${badge}`;
+  // statistika za danes (po izbrani ločljivosti)
+  const sd=(a,b)=>a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();
+  const today=SIPXVIEW.filter(x=>sd(x.t,d));
   if(today.length){
     const ps=today.map(x=>x.p), mn=Math.min(...ps),mx=Math.max(...ps),av=ps.reduce((a,b)=>a+b,0)/ps.length;
-    const hh=m=>String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
+    const hh=t=>String(t.getHours()).padStart(2,"0")+":"+String(t.getMinutes()).padStart(2,"0");
     stats.innerHTML=st("danes povpr.",(av/10).toFixed(2)+" c€")+
-      st("min",(mn/10).toFixed(2)+" c€ @"+hh(today.find(x=>x.p===mn).m))+
-      st("max",(mx/10).toFixed(2)+" c€ @"+hh(today.find(x=>x.p===mx).m))+
-      st("ločljivost",today.length>24?"15-min":"urno");
+      st("min",(mn/10).toFixed(2)+" c€ @"+hh(today.find(x=>x.p===mn).t))+
+      st("max",(mx/10).toFixed(2)+" c€ @"+hh(today.find(x=>x.p===mx).t))+
+      st("ločljivost",priceRes==="hourly"?"urno (GEN-I)":"15-min (trg)");
   } else stats.innerHTML="";
-  let nowIdx=-1; for(let i=0;i<SIPXALL.length;i++){ if(SIPXALL[i].t<=d) nowIdx=i; else break; }
+  let nowIdx=-1; for(let i=0;i<SIPXVIEW.length;i++){ if(SIPXVIEW[i].t<=d) nowIdx=i; else break; }
   drawSipxView();
   renderList(nowIdx);
 }
 let sipxView="td";
 function setSipxView(v){ sipxView=v; drawSipxView(); }
 function drawSipxView(){
-  if(!SIPXALL.length) return;
+  if(!SIPXVIEW.length) return;
   const d=nowLjubljana();
-  let data=SIPXALL;
+  let data=SIPXVIEW;
   if(sipxView==="td"){
     const tmr=new Date(d); tmr.setDate(d.getDate()+1);
     const sd=(a,b)=>a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();
-    data=SIPXALL.filter(x=>sd(x.t,d)||sd(x.t,tmr));
+    data=SIPXVIEW.filter(x=>sd(x.t,d)||sd(x.t,tmr));
   }
   drawChart("sipxChart", data, d, {hours: sipxView==="td"});
   document.querySelectorAll("#sipxToggle .tab").forEach(b=>b.classList.toggle("on", b.dataset.v===sipxView));
@@ -745,11 +762,11 @@ function drawChart(chartId,data,nowT,opts){
 function f2(t){ return ["ned","pon","tor","sre","čet","pet","sob"][t.getDay()]; }
 function renderList(nowIdx){
   const list=document.getElementById("sipxList");
-  const fins=SIPXALL.map(x=>allInFor(x.p, blockAt(x.t))); // dejanska cena na rezino
+  const fins=SIPXVIEW.map(x=>allInFor(x.p, blockAt(x.t))); // dejanska cena na rezino (po izbrani ločljivosti)
   const flo=Math.min(...fins), fhi=Math.max(fhiSafe(fins),flo+0.1);
   let html='<div class="shead"><div>ura</div><div>SIPX<br>€/MWh</div><div>končna<br>c€/kWh</div><div></div></div>', lastDay=null;
-  for(let i=0;i<SIPXALL.length;i++){
-    const it=SIPXALL[i], t=it.t, dk=`${t.getDate()}.${t.getMonth()+1}.`;
+  for(let i=0;i<SIPXVIEW.length;i++){
+    const it=SIPXVIEW[i], t=it.t, dk=`${t.getDate()}.${t.getMonth()+1}.`;
     if(dk!==lastDay){ html+=`<div style="padding:9px 8px 3px;font-family:var(--mono);font-size:13px;color:var(--faint)">${f2(t)} ${dk}</div>`; lastDay=dk; }
     const isNow=(i===nowIdx), isPast=(i<nowIdx), fin=fins[i];
     const w=Math.max(2,((fin-flo)/((fhi-flo)||1))*100);           // dolžina po dejanski ceni

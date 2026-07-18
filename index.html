@@ -258,8 +258,8 @@
         <button class="tab" data-v="multi" onclick="setSipxView('multi')">Zadnji dnevi</button>
       </div>
       <div class="tabs" id="resToggle" style="margin-top:2px">
-        <button class="tab on" data-r="15min" onclick="setPriceRes('15min')">15-min (trg)</button>
-        <button class="tab" data-r="hourly" onclick="setPriceRes('hourly')">urno (kot GEN-I)</button>
+        <button class="tab" data-r="15min" onclick="setPriceRes('15min')">15-min (trg)</button>
+        <button class="tab on" data-r="hourly" onclick="setPriceRes('hourly')">urno (kot GEN-I)</button>
       </div>
       <div class="barwrap" id="sipxChart"><div class="ld">Nalagam…</div></div>
       <div id="sipxList" class="sipxlist"></div>
@@ -595,12 +595,16 @@ function checkPriceAlert(block){
    SIPX DAY-AHEAD  (api.energy-charts.info, cona SI)
    ============================================================ */
 let SIPX_SOURCE="";
-let SIPX={}, SIPXALL=[], SIPXVIEW=[], priceRes="15min";   // SIPXALL surovi 15-min; SIPXVIEW prikaz (15-min ali urno izravnano)
-// urno povprečje (aritmetično, kakor GEN-I): vsaka 15-min rezina dobi ceno = povprečje svoje ure
+let SIPX={}, SIPXALL=[], SIPXVIEW=[], priceRes="hourly";   // SIPXALL surovi 15-min; SIPXVIEW prikaz (15-min ali urno združeno)
+// urno združevanje (aritmetično povprečje, kakor GEN-I): ena vrednost na uro
 function hourlyAvg(arr){
-  const g={}; arr.forEach(x=>{ const k=`${x.t.getFullYear()}-${x.t.getMonth()}-${x.t.getDate()}-${x.t.getHours()}`; (g[k]=g[k]||[]).push(x.p); });
-  const m={}; for(const k in g) m[k]=g[k].reduce((a,b)=>a+b,0)/g[k].length;
-  return arr.map(x=>({t:x.t, p:m[`${x.t.getFullYear()}-${x.t.getMonth()}-${x.t.getDate()}-${x.t.getHours()}`]}));
+  const g={};
+  arr.forEach(x=>{ const k=`${x.t.getFullYear()}-${x.t.getMonth()}-${x.t.getDate()}-${x.t.getHours()}`;
+    (g[k]=g[k]||[]).push(x); });
+  const out=[];
+  for(const k in g){ const a=g[k], p=a.reduce((s,x)=>s+x.p,0)/a.length, t0=a[0].t;
+    out.push({t:new Date(t0.getFullYear(),t0.getMonth(),t0.getDate(),t0.getHours(),0,0), p, n:a.length}); }
+  return out.sort((a,b)=>a.t-b.t);
 }
 function applyRes(){ SIPXVIEW = priceRes==="hourly" ? hourlyAvg(SIPXALL) : SIPXALL; }
 function setPriceRes(r){

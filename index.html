@@ -300,8 +300,10 @@ const CFG = {
   dinCap:    220,     // kapica dinamične cene energije [€/MWh]
   ddv:       0.22,    // DDV
   // Dajatve na kWh (BREZ DDV). PREVERI / PRILAGODI po svojem računu:
-  trosarina: 0.00153, // trošarina [€/kWh]
-  prispevki: 0.00678, // prispevki skupaj: OVE+SPTE + operater trga + URE [€/kWh]
+  trosarina: 0.00153, // trošarina [€/kWh] - potrjeno z računa
+  // Samo prispevki NA kWh: operater trga 0,00013 + energetska učinkovitost 0,00080.
+  // SPTE+OVE (0,77562 €/kW) se obračuna na DOGOVORJENO MOČ, ne na kWh, zato ni tu.
+  prispevki: 0.00093, // [€/kWh] - potrjeno z računa
   alertThreshold: 5   // prag obvestila za končno ceno [c€/kWh]
 };
 
@@ -552,7 +554,8 @@ function renderEnergyNow(block,d){
     `Končna cena na kWh = (dinamična energija ${din.toFixed(1)} + omrežnina energija bloka ${block} ${omr.toFixed(1)} `+
     `+ trošarina ${(CFG.trosarina*1000).toFixed(2)} + prispevki ${(CFG.prispevki*1000).toFixed(2)}) €/MWh, vse \u00d7 ${(1+CFG.ddv).toFixed(2)} (DDV). `+
     `Strošek <b>moči</b> (€/kW) se obračuna mesečno po dogovorjeni moči in ni v ceni na kWh. `+
-    `Trošarino in prispevke preveri na svojem računu in po potrebi prilagodi v CFG.`;
+    `Prikazana je <b>mejna cena na kWh</b>: vsebuje le dajatve na kWh (trošarina, prispevek za operaterja trga in energetsko učinkovitost). `+
+    `Prispevek SPTE+OVE (0,77562 €/kW) in mesečno nadomestilo sta <b>fiksna</b> in nista odvisna od tega, kdaj porabiš.`;
 }
 function card(lab,v,u,total){
   return `<div class="ecard${total?" total":""}"><div class="lab">${lab}</div>`+

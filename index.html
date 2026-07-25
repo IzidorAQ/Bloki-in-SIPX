@@ -223,6 +223,28 @@
     </section>
 
     <!-- ENERGY NOW -->
+    <!-- SIPX -->
+    <section class="panel">
+      <h2>SIPX day-ahead &middot; borzna cena energije <span id="sipxRange" style="color:var(--faint);font-family:var(--mono);font-size:11px"></span></h2>
+      <div class="stats" id="sipxStats"></div>
+      <div class="tabs" id="sipxToggle">
+        <button class="tab on" data-v="td" onclick="setSipxView('td')">Danes in jutri</button>
+        <button class="tab" data-v="multi" onclick="setSipxView('multi')">Zadnji dnevi</button>
+      </div>
+      <div class="tabs" id="resToggle" style="margin-top:2px">
+        <button class="tab" data-r="15min" onclick="setPriceRes('15min')">15-min (trg)</button>
+        <button class="tab on" data-r="hourly" onclick="setPriceRes('hourly')">urno (kot GEN-I)</button>
+      </div>
+      <div class="barwrap" id="sipxChart"><div class="ld">Nalagam…</div></div>
+      <div id="sipxList" class="sipxlist"></div>
+      <details style="margin-top:12px">
+        <summary style="cursor:pointer;color:var(--mut);font-size:12px;font-family:var(--mono)">Ročni vnos podatkov (če samodejni klic ne uspe)</summary>
+        <div class="note" style="margin-top:8px">Odpri <span style="color:var(--energy)">api.energy-charts.info/price?bzn=SI</span>, kopiraj celoten JSON in ga prilepi sem:</div>
+        <textarea id="sipxPaste" placeholder='{"unix_seconds":[...],"price":[...]}' style="width:100%;min-height:70px;margin-top:8px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px;font-family:var(--mono);font-size:11px"></textarea>
+        <button class="tab" style="margin-top:8px" onclick="ingestPaste()">Prikaži prilepljene cene</button>
+      </details>
+    </section>
+
     <section class="panel">
       <h2>Cena energije zdaj <span style="color:var(--energy);font-family:var(--mono);font-size:11px">SIPX day-ahead</span></h2>
       <div class="enow" id="enow">
@@ -248,29 +270,6 @@
         <span style="color:var(--faint)">moč = €/kW/mesec (dogovorjena obrač. moč) &middot; energija = €/kWh prevzeto</span>
       </div>
     </section>
-
-    <!-- SIPX -->
-    <section class="panel">
-      <h2>SIPX day-ahead &middot; borzna cena energije <span id="sipxRange" style="color:var(--faint);font-family:var(--mono);font-size:11px"></span></h2>
-      <div class="stats" id="sipxStats"></div>
-      <div class="tabs" id="sipxToggle">
-        <button class="tab on" data-v="td" onclick="setSipxView('td')">Danes in jutri</button>
-        <button class="tab" data-v="multi" onclick="setSipxView('multi')">Zadnji dnevi</button>
-      </div>
-      <div class="tabs" id="resToggle" style="margin-top:2px">
-        <button class="tab" data-r="15min" onclick="setPriceRes('15min')">15-min (trg)</button>
-        <button class="tab on" data-r="hourly" onclick="setPriceRes('hourly')">urno (kot GEN-I)</button>
-      </div>
-      <div class="barwrap" id="sipxChart"><div class="ld">Nalagam…</div></div>
-      <div id="sipxList" class="sipxlist"></div>
-      <details style="margin-top:12px">
-        <summary style="cursor:pointer;color:var(--mut);font-size:12px;font-family:var(--mono)">Ročni vnos podatkov (če samodejni klic ne uspe)</summary>
-        <div class="note" style="margin-top:8px">Odpri <span style="color:var(--energy)">api.energy-charts.info/price?bzn=SI</span>, kopiraj celoten JSON in ga prilepi sem:</div>
-        <textarea id="sipxPaste" placeholder='{"unix_seconds":[...],"price":[...]}' style="width:100%;min-height:70px;margin-top:8px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px;font-family:var(--mono);font-size:11px"></textarea>
-        <button class="tab" style="margin-top:8px" onclick="ingestPaste()">Prikaži prilepljene cene</button>
-      </details>
-    </section>
-
     <!-- FORECAST -->
     <section class="panel">
       <h2>Napoved tendence cen &middot; po vremenu v regiji</h2>

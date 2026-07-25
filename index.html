@@ -696,7 +696,7 @@ function priceColor(p,lo,hi){
    vrednosti valovijo. Ko podatki pridejo, se val vrstico za
    vrstico ustavi na pravi vrednosti.
    ============================================================ */
-const WAVE={raf:null,t0:0,mode:"off",locked:0,chartT:0};
+const WAVE={raf:null,t0:0,mode:"off",locked:0,chartT:0,revealT0:0,revealMs:3000}; // razkritje ~3 s
 // sintetična borzna cena [€/MWh], gre tudi v negativno
 function waveSpot(i,t){ const p=i*0.85-t*2.0; return 70+85*Math.sin(p*0.42)+35*Math.sin(p*0.17+1.3); }
 function waveRange(){ return [allInFor(-70,5), allInFor(210,2)]; }
@@ -742,8 +742,8 @@ function waveTick(now){
   const from = WAVE.mode==="reveal" ? Math.floor(WAVE.locked) : 0;
   for(let i=from;i<rows.length;i++) paintWaveRow(rows[i],i,t,flo,fhi);
   if(WAVE.mode==="reveal"){
-    const step=Math.max(rows.length/70,0.35);
-    const prev=Math.floor(WAVE.locked); WAVE.locked+=step;
+    const prev=Math.floor(WAVE.locked);
+    WAVE.locked = rows.length * ((now-WAVE.revealT0)/WAVE.revealMs);   // časovno, neodvisno od hitrosti zaslona
     for(let i=prev;i<Math.min(Math.floor(WAVE.locked),rows.length);i++) restoreRow(rows[i]);
     if(WAVE.locked>=rows.length){ stopWave(true); return; }
   } else if(now-WAVE.chartT>110){ WAVE.chartT=now; waveChart(t); }
@@ -758,7 +758,7 @@ function startWave(){
 }
 function revealWave(){                 // podatki so prišli: ustavi val po vrsticah
   if(WAVE.mode==="off") return;
-  WAVE.mode="reveal"; WAVE.locked=0;
+  WAVE.mode="reveal"; WAVE.locked=0; WAVE.revealT0=performance.now();
   if(!WAVE.raf) WAVE.raf=requestAnimationFrame(waveTick);
 }
 function stopWave(done){

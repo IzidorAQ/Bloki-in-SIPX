@@ -696,7 +696,7 @@ function priceColor(p,lo,hi){
    vrednosti valovijo. Ko podatki pridejo, se val vrstico za
    vrstico ustavi na pravi vrednosti.
    ============================================================ */
-const WAVE={raf:null,t0:0,mode:"off",locked:0,chartT:0,revealT0:0,revealMs:3000}; // razkritje ~3 s
+const WAVE={raf:null,t0:0,mode:"off",locked:0,chartT:0,revealT0:0,revealMs:3000,startIdx:0}; // razkritje ~3 s
 // sintetična borzna cena [€/MWh], gre tudi v negativno
 function waveSpot(i,t){ const p=i*0.85-t*2.0; return 70+85*Math.sin(p*0.42)+35*Math.sin(p*0.17+1.3); }
 function waveRange(){ return [allInFor(-70,5), allInFor(210,2)]; }
@@ -735,17 +735,26 @@ function waveChart(t){
     data.push({t:x,p:waveSpot(i,t)}); }
   drawChart("sipxChart",data,new Date(1970,0,1),{hours:true});
 }
+// med razkritjem: prvih "locked" stolpcev je pravih, ostali še valovijo
+function waveChartReveal(t,frac){
+  const real=viewData(); if(!real.length) return;
+  const n=real.length, lock=Math.floor(n*frac);
+  const data=real.map((x,i)=> i<lock ? x : {t:x.t, p:waveSpot(i,t)});
+  drawChart("sipxChart", data, nowLjubljana(), {hours: sipxView==="td"});
+}
 function waveTick(now){
   if(WAVE.mode==="off") return;
   const t=(now-WAVE.t0)/1000, [flo,fhi]=waveRange();
   const rows=document.querySelectorAll("#sipxList .srow");
-  const from = WAVE.mode==="reveal" ? Math.floor(WAVE.locked) : 0;
+  const from = WAVE.mode==="reveal" ? Math.max(WAVE.startIdx,Math.floor(WAVE.locked)) : 0;
   for(let i=from;i<rows.length;i++) paintWaveRow(rows[i],i,t,flo,fhi);
   if(WAVE.mode==="reveal"){
-    const prev=Math.floor(WAVE.locked);
-    WAVE.locked = rows.length * ((now-WAVE.revealT0)/WAVE.revealMs);   // časovno, neodvisno od hitrosti zaslona
+    const frac=(now-WAVE.revealT0)/WAVE.revealMs;
+    const prev=Math.max(WAVE.startIdx,Math.floor(WAVE.locked));
+    WAVE.locked = WAVE.startIdx + (rows.length-WAVE.startIdx)*frac;    // od vidne vrstice navzdol
     for(let i=prev;i<Math.min(Math.floor(WAVE.locked),rows.length);i++) restoreRow(rows[i]);
-    if(WAVE.locked>=rows.length){ stopWave(true); return; }
+    if(now-WAVE.chartT>90){ WAVE.chartT=now; waveChartReveal(t,frac); }
+    if(frac>=1){ stopWave(true); return; }
   } else if(now-WAVE.chartT>110){ WAVE.chartT=now; waveChart(t); }
   WAVE.raf=requestAnimationFrame(waveTick);
 }
@@ -758,13 +767,23 @@ function startWave(){
 }
 function revealWave(){                 // podatki so prišli: ustavi val po vrsticah
   if(WAVE.mode==="off") return;
-  WAVE.mode="reveal"; WAVE.locked=0; WAVE.revealT0=performance.now();
+  const rows=document.querySelectorAll("#sipxList .srow");
+  // razkrivanje naj se začne tam, kamor uporabnik gleda (pri trenutni uri),
+  // vrstice nad tem so izven zaslona in dobijo prave vrednosti takoj
+  let startIdx=0;
+  const nowRow=document.getElementById("sipxNowRow");
+  if(nowRow) startIdx=[...rows].indexOf(nowRow)-4;   // nekaj vrstic pred trenutno uro
+  // zagotovi, da se razkrije vsaj cel zaslon vrstic, tudi če je "zdaj" na koncu seznama
+  startIdx=Math.max(0, Math.min(startIdx, rows.length-16));
+  for(let i=0;i<startIdx;i++) restoreRow(rows[i]);
+  WAVE.startIdx=startIdx; WAVE.locked=startIdx;
+  WAVE.mode="reveal"; WAVE.revealT0=performance.now();
   if(!WAVE.raf) WAVE.raf=requestAnimationFrame(waveTick);
 }
 function stopWave(done){
   if(WAVE.raf) cancelAnimationFrame(WAVE.raf);
   WAVE.raf=null; WAVE.mode="off";
-  if(done) document.querySelectorAll("#sipxList .srow").forEach(restoreRow);
+  if(done){ document.querySelectorAll("#sipxList .srow").forEach(restoreRow); drawSipxView(); }
 }
 function renderSIPX(){
   const chart=document.getElementById("sipxChart"), stats=document.getElementById("sipxStats");
@@ -791,15 +810,18 @@ function renderSIPX(){
 }
 let sipxView="td";
 function setSipxView(v){ stopWave(true); sipxView=v; drawSipxView(); }
+function viewData(){
+  if(!SIPXVIEW.length) return [];
+  const d=nowLjubljana();
+  if(sipxView!=="td") return SIPXVIEW;
+  const tmr=new Date(d); tmr.setDate(d.getDate()+1);
+  const sd=(a,b)=>a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();
+  return SIPXVIEW.filter(x=>sd(x.t,d)||sd(x.t,tmr));
+}
 function drawSipxView(){
   if(!SIPXVIEW.length) return;
   const d=nowLjubljana();
-  let data=SIPXVIEW;
-  if(sipxView==="td"){
-    const tmr=new Date(d); tmr.setDate(d.getDate()+1);
-    const sd=(a,b)=>a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();
-    data=SIPXVIEW.filter(x=>sd(x.t,d)||sd(x.t,tmr));
-  }
+  const data=viewData();
   drawChart("sipxChart", data, d, {hours: sipxView==="td"});
   document.querySelectorAll("#sipxToggle .tab").forEach(b=>b.classList.toggle("on", b.dataset.v===sipxView));
 }

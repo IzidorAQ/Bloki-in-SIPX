@@ -627,43 +627,57 @@ async function loadSIPX(){
   const box=document.getElementById("sipxChart");
   if(!SIPXALL.length) startWave();
   const d=nowLjubljana();
-  const fmt=x=>x.toISOString().slice(0,10);
+  // datum v ljubljanski coni (ne prek toISOString, ki bi ga zamaknil v UTC)
+  const fmt=x=>`${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`;
   const start=new Date(d); start.setDate(d.getDate()-8);
   const end=new Date(d);   end.setDate(d.getDate()+2);
-  const target=`https://api.energy-charts.info/price?bzn=SI&start=${fmt(start)}&end=${fmt(end)}`;
-  const urls=[
-    target,
-    `https://api.energy-charts.info/price?bzn=SI`,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(target)}`,
-    `https://corsproxy.io/?url=${encodeURIComponent(target)}`
-  ];
-  let res=null, lastErr="";
+  const ranged=`https://api.energy-charts.info/price?bzn=SI&start=${fmt(start)}&end=${fmt(end)}`;
+  const latest=`https://api.energy-charts.info/price?bzn=SI`;   // tekoče okno: danes in jutri
+  const prox=u=>[`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+                 `https://corsproxy.io/?url=${encodeURIComponent(u)}`];
   const tried=[];
-  for(const u of urls){
-    const r=await tryFetchJSON(u);
-    if(r.data && (r.data.unix_seconds||[]).length && pricesOf(r.data).length){ res=r.data; break; }
-    const why = r.err || (r.data? ((r.data.unix_seconds||[]).length? "odgovor brez cen ("+Object.keys(r.data).join(",")+")" : "prazen unix_seconds") : "prazen odgovor");
-    lastErr=why; tried.push(`<li>${u.split("?")[0].replace("https://","")} &rarr; ${why}</li>`);
+  // pridobi en vir (z rezervnima posrednikoma)
+  async function grab(u){
+    for(const cand of [u,...prox(u)]){
+      const r=await tryFetchJSON(cand);
+      if(r.data && (r.data.unix_seconds||[]).length && pricesOf(r.data).length) return r.data;
+      const why=r.err||(r.data?((r.data.unix_seconds||[]).length?"odgovor brez cen":"prazen unix_seconds"):"prazen odgovor");
+      tried.push(`<li>${cand.split("?")[0].replace("https://","")} &rarr; ${why}</li>`);
+    }
+    return null;
   }
-  if(!res){
-    stopWave(false);                    // ustavi valovanje, sicer prepiše sporočilo o napaki
-    const blocked=/Failed to fetch|NetworkError|load failed/i.test(lastErr);
-    if(SIPXALL.length){ // podatki so že prikazani -> ne prepiši grafa, samo opozori
+  // OBA vira vzporedno in ju združi: "ranged" da zgodovino, "latest" pa današnji in jutrišnji dan
+  const [A,B]=await Promise.all([grab(ranged),grab(latest)]);
+  if(!A && !B){
+    stopWave(false);
+    const blocked=/Failed to fetch|NetworkError|load failed/i.test(tried.join(" "));
+    if(SIPXALL.length){
       const rng=document.getElementById("sipxRange");
-      rng.innerHTML+=` <span style="color:var(--b2)">&middot; žive cene ni bilo mogoče naložiti (${lastErr})</span> `+
+      rng.innerHTML+=` <span style="color:var(--b2)">&middot; osvežitev ni uspela</span> `+
         `<button class="tab" style="padding:2px 8px" onclick="loadSIPX()">znova</button>`;
       return;
     }
-    box.innerHTML=`<div class="err">SIPX ni dosegljiv (${lastErr}).`+
+    box.innerHTML=`<div class="err">SIPX ni dosegljiv.`+
       (blocked?` Verjetno blokada zunanjih klicev v predogledu (peskovnik). Na GitHub Pages se naloži samodejno. `:` `)+
       `Lahko pa podatke <b>ročno prilepiš</b> spodaj.`+
       `<ul style="margin:8px 0 0;padding-left:18px;font-size:14px">${tried.join("")}</ul>`+
       `<br><button class="tab" onclick="loadSIPX()">Poskusi znova</button> `+
-      `<a class="tab" style="text-decoration:none" target="_blank" href="${target}">Odpri vir &#8599;</a></div>`;
+      `<a class="tab" style="text-decoration:none" target="_blank" href="${latest}">Odpri vir &#8599;</a></div>`;
     document.getElementById("sipxList").innerHTML="";
     return;
   }
-  ingestSIPX(res);
+  ingestSIPX(mergeSIPX(A,B));
+}
+// združi dva odgovora po časovni oznaki (novejši vir ima prednost pri podvojenih)
+function mergeSIPX(a,b){
+  const m=new Map();
+  for(const j of [a,b]){
+    if(!j) continue;
+    const us=j.unix_seconds||[], pr=pricesOf(j);
+    for(let i=0;i<us.length;i++) if(pr[i]!=null) m.set(us[i],pr[i]);
+  }
+  const keys=[...m.keys()].sort((x,y)=>x-y);
+  return {unix_seconds:keys, price:keys.map(k=>m.get(k)), unit:"EUR / MWh"};
 }
 // Sprejme JSON energy-charts (unix_seconds + price), podpira 15-min ali urno ločljivost
 // vir je že spreminjal ime polja s cenami (price / data / values) - sprejmi vse

@@ -638,10 +638,17 @@ async function loadSIPX(){
     `https://corsproxy.io/?url=${encodeURIComponent(target)}`
   ];
   let res=null, lastErr="";
-  for(const u of urls){ const r=await tryFetchJSON(u); if(r.data&&r.data.unix_seconds){res=r.data;break;} lastErr=r.err||"prazen odgovor"; }
+  const tried=[];
+  for(const u of urls){
+    const r=await tryFetchJSON(u);
+    if(r.data && (r.data.unix_seconds||[]).length && pricesOf(r.data).length){ res=r.data; break; }
+    const why = r.err || (r.data? ((r.data.unix_seconds||[]).length? "odgovor brez cen ("+Object.keys(r.data).join(",")+")" : "prazen unix_seconds") : "prazen odgovor");
+    lastErr=why; tried.push(`<li>${u.split("?")[0].replace("https://","")} &rarr; ${why}</li>`);
+  }
   if(!res){
+    stopWave(false);                    // ustavi valovanje, sicer prepiše sporočilo o napaki
     const blocked=/Failed to fetch|NetworkError|load failed/i.test(lastErr);
-    if(SIPXALL.length){ // vzorec je že prikazan -> ne prepiši grafa, samo opozori
+    if(SIPXALL.length){ // podatki so že prikazani -> ne prepiši grafa, samo opozori
       const rng=document.getElementById("sipxRange");
       rng.innerHTML+=` <span style="color:var(--b2)">&middot; žive cene ni bilo mogoče naložiti (${lastErr})</span> `+
         `<button class="tab" style="padding:2px 8px" onclick="loadSIPX()">znova</button>`;
@@ -650,7 +657,8 @@ async function loadSIPX(){
     box.innerHTML=`<div class="err">SIPX ni dosegljiv (${lastErr}).`+
       (blocked?` Verjetno blokada zunanjih klicev v predogledu (peskovnik). Na GitHub Pages se naloži samodejno. `:` `)+
       `Lahko pa podatke <b>ročno prilepiš</b> spodaj.`+
-      `<br><br><button class="tab" onclick="loadSIPX()">Poskusi znova</button> `+
+      `<ul style="margin:8px 0 0;padding-left:18px;font-size:14px">${tried.join("")}</ul>`+
+      `<br><button class="tab" onclick="loadSIPX()">Poskusi znova</button> `+
       `<a class="tab" style="text-decoration:none" target="_blank" href="${target}">Odpri vir &#8599;</a></div>`;
     document.getElementById("sipxList").innerHTML="";
     return;
@@ -658,9 +666,29 @@ async function loadSIPX(){
   ingestSIPX(res);
 }
 // Sprejme JSON energy-charts (unix_seconds + price), podpira 15-min ali urno ločljivost
+// vir je že spreminjal ime polja s cenami (price / data / values) - sprejmi vse
+function pricesOf(j){
+  if(!j) return [];
+  for(const k of ["price","data","values","prices"]){
+    const v=j[k];
+    if(Array.isArray(v) && v.length && typeof v[0]==="number") return v;
+  }
+  // zadnja možnost: prvo številsko polje enake dolžine kot unix_seconds (nikoli sam unix_seconds)
+  const n=(j.unix_seconds||[]).length;
+  for(const k in j){ if(k==="unix_seconds") continue;
+    const v=j[k];
+    if(Array.isArray(v) && v.length===n && n>0 && v.some(x=>typeof x==="number")) return v; }
+  return [];
+}
 function ingestSIPX(j, isSeed){
-  const us=j.unix_seconds||[], pr=j.price||[];
+  const us=j.unix_seconds||[], pr=pricesOf(j);
   if(!us.length){ document.getElementById("sipxChart").innerHTML='<div class="err">Vir nima podatkov (prazen unix_seconds).</div>'; return; }
+  if(!pr.length){
+    document.getElementById("sipxChart").innerHTML='<div class="err">Vir je vrnil čase brez cen. '+
+      'Polja s cenami ni bilo mogoče najti (pričakovano <b>price</b> ali <b>data</b>). '+
+      'Najdena polja: '+Object.keys(j).join(", ")+'</div>';
+    return;
+  }
   SIPX_SOURCE = isSeed ? "seed" : "live";
   SIPX={}; SIPXALL=[];
   for(let i=0;i<us.length;i++){
@@ -696,7 +724,7 @@ function priceColor(p,lo,hi){
    vrednosti valovijo. Ko podatki pridejo, se val vrstico za
    vrstico ustavi na pravi vrednosti.
    ============================================================ */
-const WAVE={raf:null,t0:0,mode:"off",locked:0,chartT:0,revealT0:0,revealMs:3000,startIdx:0}; // razkritje ~3 s
+const WAVE={raf:null,t0:0,mode:"off",locked:0,chartT:0,revealT0:0,revealMs:5000,startIdx:0}; // razkritje ~5 s
 // sintetična borzna cena [€/MWh], gre tudi v negativno
 function waveSpot(i,t){ const p=i*0.85-t*2.0; return 70+85*Math.sin(p*0.42)+35*Math.sin(p*0.17+1.3); }
 function waveRange(){ return [allInFor(-70,5), allInFor(210,2)]; }
@@ -778,6 +806,10 @@ function revealWave(){                 // podatki so prišli: ustavi val po vrst
   for(let i=0;i<startIdx;i++) restoreRow(rows[i]);
   WAVE.startIdx=startIdx; WAVE.locked=startIdx;
   WAVE.mode="reveal"; WAVE.revealT0=performance.now();
+  // takoj prekrij z valom, da prave vrednosti ne preblisnejo za eno sličico
+  const t0=(WAVE.revealT0-WAVE.t0)/1000, [flo,fhi]=waveRange();
+  for(let i=startIdx;i<rows.length;i++) paintWaveRow(rows[i],i,t0,flo,fhi);
+  waveChartReveal(t0,0);
   if(!WAVE.raf) WAVE.raf=requestAnimationFrame(waveTick);
 }
 function stopWave(done){
@@ -804,7 +836,7 @@ function renderSIPX(){
       st("ločljivost",priceRes==="hourly"?"urno (GEN-I)":"15-min (trg)");
   } else stats.innerHTML="";
   let nowIdx=-1; for(let i=0;i<SIPXVIEW.length;i++){ if(SIPXVIEW[i].t<=d) nowIdx=i; else break; }
-  drawSipxView();
+  if(WAVE.mode==="off") drawSipxView();   // sicer graf riše razkrivanje samo (brez preblika pravih cen)
   renderList(nowIdx);
   revealWave();   // val se ustavlja vrstico za vrstico na pravih vrednostih
 }

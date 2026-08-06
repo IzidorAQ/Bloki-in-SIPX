@@ -197,7 +197,7 @@
 </style>
 </head>
 <body>
-<div class="wrap"><div style="font-family:var(--mono);font-size:12px;color:var(--faint);text-align:right">v2026-08-06 16:44</div>
+<div class="wrap">
 
   <header class="top">
     <div>
@@ -1391,5 +1391,9 @@ let rsTo=null;
 addEventListener("resize",()=>{ clearTimeout(rsTo); rsTo=setTimeout(()=>{ if(SIPXVIEW.length) drawSipxView(); },250); });
 setInterval(loadWeather15, 1000*60*60*3);
 </script>
+<div id="verBadge" onclick="this.style.display='none'"
+ style="position:fixed;right:8px;bottom:8px;z-index:9999;background:#34e3d2;color:#06201d;
+ font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;padding:6px 10px;
+ border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.5);cursor:pointer">v 2026-08-06 16:58</div>
 </body>
 </html>

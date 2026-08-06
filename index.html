@@ -100,25 +100,26 @@
   .ecard.total .v{color:var(--energy)}
 
   /* SIPX chart */
-  .barwrap{position:relative}
+  .barwrap{position:relative;min-height:170px}
   svg{display:block;width:100%;height:auto;overflow:visible}
   .stats{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:14px;font-size:17px;color:var(--mut)}
   .stats .num{color:var(--ink);font-weight:700;font-size:20px}
   .stats .lab{display:block;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint)}
-  .tabs{display:flex;gap:8px;margin-bottom:14px}
+  .tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
   .tab{font-family:var(--mono);font-size:16px;padding:9px 15px;border-radius:9px;background:var(--panel2);
-    border:1px solid var(--line);color:var(--mut);cursor:pointer}
+    border:1px solid var(--line);color:var(--mut);cursor:pointer;flex:1 1 auto;min-width:0;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
   .tab.on{background:var(--energy);color:#06201d;border-color:var(--energy);font-weight:700}
   .tab[disabled]{opacity:.45;cursor:not-allowed}
 
   /* SIPX 15-min list */
-  .sipxlist{margin-top:16px;max-height:720px;overflow-y:auto;border:1px solid var(--line);border-radius:11px;
-    padding:5px;background:#0f141b}
+  .sipxlist{margin-top:16px;max-height:min(720px,78vh);overflow-y:auto;border:1px solid var(--line);border-radius:11px;
+    padding:0 5px 5px;background:#0f141b;overscroll-behavior:contain}
   .sipxlist::-webkit-scrollbar{width:10px}
   .sipxlist::-webkit-scrollbar-thumb{background:#3a4554;border-radius:5px}
-  .srow,.shead{display:grid;grid-template-columns:70px 76px 96px 1fr;gap:10px;align-items:center;padding:7px 10px}
+  .srow,.shead{display:grid;grid-template-columns:4.4em 4.6em 5.4em minmax(0,1fr);gap:.6em;align-items:center;padding:7px 10px}
   .srow{border-radius:8px}
-  .shead{position:sticky;top:0;z-index:3;background:#0f141b;font-family:var(--mono);font-size:12px;line-height:1.2;
+  .shead{position:sticky;top:0;z-index:3;background:#0f141b;box-shadow:0 6px 10px -6px #0f141b;font-family:var(--mono);font-size:12px;line-height:1.2;
     font-weight:600;color:var(--faint);border-bottom:1px solid var(--line)}
   .shead div{text-align:right}.shead div:first-child{text-align:left}
   .srow.now{background:#243140}
@@ -175,6 +176,15 @@
   .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:15px;color:var(--mut);margin-top:12px}
   .legend span{display:inline-flex;align-items:center;gap:7px}
   .sw{width:15px;height:15px;border-radius:4px;display:inline-block}
+  /* ozek zaslon ali velika sistemska pisava: barvni stolpec dobi svojo vrstico */
+  @media(max-width:560px){
+    .srow,.shead{grid-template-columns:1fr auto auto;gap:.5em;row-gap:4px}
+    .shead div:nth-child(4){display:none}
+    .srow .sbarwrap{grid-column:1/-1;height:12px}
+    .srow .sbar{height:10px;border-radius:5px}
+    .tab{font-size:15px;padding:8px 10px}
+    .tabs{gap:6px}
+  }
   @media(max-width:680px){
     .enow{grid-template-columns:1fr}
     .disc{width:128px;height:128px}.disc .bn{font-size:64px}
@@ -881,7 +891,8 @@ function drawChart(chartId,data,nowT,opts){
   const showNow = nowIdx>=0 && sameDay(data[nowIdx].t,nowT);
   const ps=data.map(x=>x.p), mn=Math.min(...ps), mx=Math.max(...ps);
   const lo=Math.min(0,mn), hi=Math.max(mx,1), rng=(hi-lo)||1;
-  const W=1000,H=240,pl=8,prr=42,pt=16,pb=opts.hours?42:24, iw=W-pl-prr, ih=H-pt-pb;
+  const narrow = (window.innerWidth||1000)<=560;         // na telefonu naj bo graf višji
+  const W=1000,H=narrow?380:240,pl=8,prr=42,pt=16,pb=opts.hours?42:24, iw=W-pl-prr, ih=H-pt-pb;
   const bw=iw/N;
   const dayY=opts.hours?H-4:H-7;
   let bars="",axis="",grid="";
@@ -1372,6 +1383,8 @@ loadSIPX();                    // naloži žive cene (8-dnevno okno)
 loadForecast();
 loadWeather15();
 setInterval(loadSIPX, 1000*60*15);
+let rsTo=null;
+addEventListener("resize",()=>{ clearTimeout(rsTo); rsTo=setTimeout(()=>{ if(SIPXVIEW.length) drawSipxView(); },250); });
 setInterval(loadWeather15, 1000*60*60*3);
 </script>
 </body>

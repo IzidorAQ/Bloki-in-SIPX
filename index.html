@@ -19,7 +19,7 @@
   }
   *{box-sizing:border-box}
   html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);
-    font-size:18px;line-height:1.5;-webkit-font-smoothing:antialiased}
+    font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased}
   a{color:var(--energy)}
   .wrap{max-width:1180px;margin:0 auto;padding:22px 16px 70px}
   h1,h2,h3{font-family:var(--display);font-weight:700;margin:0}
@@ -113,25 +113,25 @@
   .tab[disabled]{opacity:.45;cursor:not-allowed}
 
   /* SIPX 15-min list */
-  .sipxlist{margin-top:16px;max-height:min(720px,78vh);overflow-y:auto;border:1px solid var(--line);border-radius:11px;
+  .sipxlist{margin-top:14px;overflow-x:hidden;max-height:min(720px,78vh);overflow-y:auto;border:1px solid var(--line);border-radius:11px;
     padding:0 5px 5px;background:#0f141b;overscroll-behavior:contain}
   .sipxlist::-webkit-scrollbar{width:10px}
   .sipxlist::-webkit-scrollbar-thumb{background:#3a4554;border-radius:5px}
   /* širine v odstotkih: stolpci se prilegajo pri vsaki velikosti pisave in ostanejo skupaj */
-  .srow,.shead{display:grid;grid-template-columns:27% 31% 29%;gap:2%;align-items:center;
-    padding:7px 10px 11px;justify-content:start}
+  .srow,.shead{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr) minmax(0,1fr);
+    gap:8px;align-items:center;padding:5px 9px 9px}
   .srow>div,.shead>div{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .srow{position:relative;overflow:hidden}
   .srow>*{position:relative;z-index:1}
   .srow{border-radius:8px}
-  .shead{position:sticky;top:0;z-index:5;background:#0f141b;box-shadow:0 8px 8px -4px #0f141b;margin:0 -5px;padding-left:15px;padding-right:15px;font-family:var(--mono);font-size:12px;line-height:1.2;
+  .shead{position:sticky;top:0;z-index:5;background:#0f141b;box-shadow:0 8px 8px -4px #0f141b;font-family:var(--mono);font-size:11px;line-height:1.2;
     font-weight:600;color:var(--faint);border-bottom:1px solid var(--line)}
   .shead div{text-align:right}.shead div:first-child{text-align:left}
   .srow.now{background:#243140}
-  .srow .stime{font-family:var(--mono);font-size:16px;color:var(--mut)}
+  .srow .stime{font-family:var(--mono);font-size:15px;color:var(--mut)}
   .srow.now .stime{color:#fff;font-weight:700}
-  .srow .sprice{font-family:var(--mono);font-size:17px;font-weight:700;text-align:right}
-  .srow .sfin{font-family:var(--mono);font-size:18px;font-weight:700;text-align:right}
+  .srow .sprice{font-family:var(--mono);font-size:15px;font-weight:700;text-align:right}
+  .srow .sfin{font-family:var(--mono);font-size:17px;font-weight:700;text-align:right}
   /* barvni prikaz je polnilo vrstice: vedno viden, ne glede na velikost pisave */
   .srow .sbarwrap{position:absolute;left:0;right:0;bottom:0;height:7px;z-index:0;display:block;pointer-events:none}
   .srow .sbar{height:100%;border-radius:0 4px 4px 0;min-width:5px}
@@ -185,7 +185,7 @@
   .sw{width:15px;height:15px;border-radius:4px;display:inline-block}
   /* ozek zaslon ali velika sistemska pisava: barvni stolpec dobi svojo vrstico */
   @media(max-width:560px){
-    .srow,.shead{grid-template-columns:28% 32% 30%;gap:1.5%;padding:7px 7px 11px}
+    .srow,.shead{gap:6px;padding:4px 7px 8px}
     .tab{font-size:15px;padding:8px 10px}
     .tabs{gap:6px}
   }
@@ -298,7 +298,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-07 10:09</span>
+      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-07 13:46</span>
     </div>
 
   </div>

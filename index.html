@@ -119,7 +119,7 @@
   .sipxlist::-webkit-scrollbar-thumb{background:#3a4554;border-radius:5px}
   /* širine v odstotkih: stolpci se prilegajo pri vsaki velikosti pisave in ostanejo skupaj */
   .srow,.shead{display:grid;grid-template-columns:27% 31% 29%;gap:2%;align-items:center;
-    padding:7px 10px;justify-content:start}
+    padding:7px 10px 11px;justify-content:start}
   .srow>div,.shead>div{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .srow{position:relative;overflow:hidden}
   .srow>*{position:relative;z-index:1}
@@ -133,9 +133,9 @@
   .srow .sprice{font-family:var(--mono);font-size:17px;font-weight:700;text-align:right}
   .srow .sfin{font-family:var(--mono);font-size:18px;font-weight:700;text-align:right}
   /* barvni prikaz je polnilo vrstice: vedno viden, ne glede na velikost pisave */
-  .srow .sbarwrap{position:absolute;left:0;top:0;bottom:0;width:100%;z-index:0;display:block;pointer-events:none}
-  .srow .sbar{height:100%;border-radius:0 10px 10px 0;min-width:5px;opacity:.30}
-  .srow.now .sbar{opacity:.42}
+  .srow .sbarwrap{position:absolute;left:0;right:0;bottom:0;height:7px;z-index:0;display:block;pointer-events:none}
+  .srow .sbar{height:100%;border-radius:0 4px 4px 0;min-width:5px}
+  .srow.now .sbarwrap{height:9px}
 
   /* forecast */
   .fc{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
@@ -185,7 +185,7 @@
   .sw{width:15px;height:15px;border-radius:4px;display:inline-block}
   /* ozek zaslon ali velika sistemska pisava: barvni stolpec dobi svojo vrstico */
   @media(max-width:560px){
-    .srow,.shead{grid-template-columns:28% 32% 30%;gap:1.5%;padding:7px 7px}
+    .srow,.shead{grid-template-columns:28% 32% 30%;gap:1.5%;padding:7px 7px 11px}
     .tab{font-size:15px;padding:8px 10px}
     .tabs{gap:6px}
   }
@@ -934,14 +934,16 @@ function f2(t){ return ["ned","pon","tor","sre","čet","pet","sob"][t.getDay()];
 function renderList(nowIdx){
   const list=document.getElementById("sipxList");
   const fins=SIPXVIEW.map(x=>allInFor(x.p, blockAt(x.t))); // dejanska cena na rezino (po izbrani ločljivosti)
-  const flo=Math.min(...fins), fhi=Math.max(fhiSafe(fins),flo+0.1);
+  // barve in dolžine po ISTI lestvici kot stolpčni graf zgoraj (borzna cena, isti razpon)
+  const vps=(viewData().length?viewData():SIPXVIEW).map(x=>x.p);
+  const clo=Math.min(0,...vps), chi=Math.max(...vps,1);
   let html='<div class="shead"><div>ura</div><div>končna<br>c€/kWh</div><div>SIPX<br>€/MWh</div></div>', lastDay=null;
   for(let i=0;i<SIPXVIEW.length;i++){
     const it=SIPXVIEW[i], t=it.t, dk=`${t.getDate()}.${t.getMonth()+1}.`;
     if(dk!==lastDay){ html+=`<div style="padding:9px 8px 3px;font-family:var(--mono);font-size:13px;color:var(--faint)">${f2(t)} ${dk}</div>`; lastDay=dk; }
     const isNow=(i===nowIdx), isPast=(i<nowIdx), fin=fins[i];
-    const w=Math.max(2,((fin-flo)/((fhi-flo)||1))*100);           // dolžina po dejanski ceni
-    const col=isPast?"#39424f":priceColor(fin,flo,fhi);           // barva po dejanski ceni
+    const w=Math.max(2,Math.min(100,((it.p-clo)/((chi-clo)||1))*100));  // dolžina kot višina stolpca v grafu
+    const col=isPast?"#39424f":priceColor(it.p,clo,chi);                // barva enaka kot v grafu
     const tlab=isNow?"Zdaj":`${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`;
     html+=`<div class="srow${isNow?" now":""}"${isNow?' id="sipxNowRow"':''} data-p="${Math.round(it.p)}" data-f="${fin.toFixed(1)}" data-w="${w.toFixed(1)}" data-c="${col}" data-h="${t.getHours()}">`+
       `<div class="stime">${tlab}</div>`+

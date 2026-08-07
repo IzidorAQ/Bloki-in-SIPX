@@ -118,7 +118,7 @@
   .sipxlist::-webkit-scrollbar{width:10px}
   .sipxlist::-webkit-scrollbar-thumb{background:#3a4554;border-radius:5px}
   /* širine v odstotkih: stolpci se prilegajo pri vsaki velikosti pisave in ostanejo skupaj */
-  .srow,.shead{display:grid;grid-template-columns:27% 29% 31%;gap:2%;align-items:center;
+  .srow,.shead{display:grid;grid-template-columns:27% 31% 29%;gap:2%;align-items:center;
     padding:7px 10px;justify-content:start}
   .srow>div,.shead>div{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .srow{position:relative;overflow:hidden}
@@ -185,7 +185,7 @@
   .sw{width:15px;height:15px;border-radius:4px;display:inline-block}
   /* ozek zaslon ali velika sistemska pisava: barvni stolpec dobi svojo vrstico */
   @media(max-width:560px){
-    .srow,.shead{grid-template-columns:28% 30% 32%;gap:1.5%;padding:7px 7px}
+    .srow,.shead{grid-template-columns:28% 32% 30%;gap:1.5%;padding:7px 7px}
     .tab{font-size:15px;padding:8px 10px}
     .tabs{gap:6px}
   }
@@ -296,6 +296,10 @@
       <div class="wx15" id="wx15"></div>
       <div class="note" id="wxnote"></div>
     </section>
+
+    <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
+      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-07 10:09</span>
+    </div>
 
   </div>
 </div>
@@ -758,12 +762,12 @@ function waveSpot(i,t){ const p=i*0.85-t*2.0; return 70+85*Math.sin(p*0.42)+35*M
 function waveRange(){ return [allInFor(-70,5), allInFor(210,2)]; }
 function waveRowsHTML(n){
   const d=nowLjubljana();
-  let h='<div class="shead"><div>ura</div><div>SIPX<br>€/MWh</div><div>končna<br>c€/kWh</div></div>';
+  let h='<div class="shead"><div>ura</div><div>končna<br>c€/kWh</div><div>SIPX<br>€/MWh</div></div>';
   h+=`<div style="padding:9px 8px 3px;font-family:var(--mono);font-size:13px;color:var(--faint)">${f2(d)} ${d.getDate()}.${d.getMonth()+1}.</div>`;
   for(let i=0;i<n;i++){
     h+=`<div class="srow" data-h="${i}"><div class="stime">${String(i).padStart(2,"0")}:00</div>`+
-       `<div class="sprice" style="color:var(--ink)">0</div>`+
        `<div class="sfin" style="color:var(--energy)">0.0</div>`+
+       `<div class="sprice" style="color:var(--ink)">0</div>`+
        `<div class="sbarwrap"><div class="sbar" style="width:2%;background:var(--b5)"></div></div></div>`;
   }
   return h;
@@ -931,7 +935,7 @@ function renderList(nowIdx){
   const list=document.getElementById("sipxList");
   const fins=SIPXVIEW.map(x=>allInFor(x.p, blockAt(x.t))); // dejanska cena na rezino (po izbrani ločljivosti)
   const flo=Math.min(...fins), fhi=Math.max(fhiSafe(fins),flo+0.1);
-  let html='<div class="shead"><div>ura</div><div>SIPX<br>€/MWh</div><div>končna<br>c€/kWh</div></div>', lastDay=null;
+  let html='<div class="shead"><div>ura</div><div>končna<br>c€/kWh</div><div>SIPX<br>€/MWh</div></div>', lastDay=null;
   for(let i=0;i<SIPXVIEW.length;i++){
     const it=SIPXVIEW[i], t=it.t, dk=`${t.getDate()}.${t.getMonth()+1}.`;
     if(dk!==lastDay){ html+=`<div style="padding:9px 8px 3px;font-family:var(--mono);font-size:13px;color:var(--faint)">${f2(t)} ${dk}</div>`; lastDay=dk; }
@@ -941,8 +945,8 @@ function renderList(nowIdx){
     const tlab=isNow?"Zdaj":`${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`;
     html+=`<div class="srow${isNow?" now":""}"${isNow?' id="sipxNowRow"':''} data-p="${Math.round(it.p)}" data-f="${fin.toFixed(1)}" data-w="${w.toFixed(1)}" data-c="${col}" data-h="${t.getHours()}">`+
       `<div class="stime">${tlab}</div>`+
-      `<div class="sprice" style="color:${isPast?'var(--faint)':'var(--ink)'}">${Math.round(it.p)}</div>`+
       `<div class="sfin" style="color:${isPast?'var(--faint)':'var(--energy)'}">${fin.toFixed(1)}</div>`+
+      `<div class="sprice" style="color:${isPast?'var(--faint)':'var(--ink)'}">${Math.round(it.p)}</div>`+
       `<div class="sbarwrap"><div class="sbar" style="width:${w.toFixed(1)}%;background:${col}"></div></div></div>`;
   }
   list.innerHTML=html;
@@ -1391,9 +1395,5 @@ let rsTo=null;
 addEventListener("resize",()=>{ clearTimeout(rsTo); rsTo=setTimeout(()=>{ if(SIPXVIEW.length) drawSipxView(); },250); });
 setInterval(loadWeather15, 1000*60*60*3);
 </script>
-<div id="verBadge" onclick="this.style.display='none'"
- style="position:fixed;right:8px;bottom:8px;z-index:9999;background:#34e3d2;color:#06201d;
- font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;padding:6px 10px;
- border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.5);cursor:pointer">v 2026-08-06 16:58</div>
 </body>
 </html>

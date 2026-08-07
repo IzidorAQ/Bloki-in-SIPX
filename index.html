@@ -934,16 +934,15 @@ function f2(t){ return ["ned","pon","tor","sre","čet","pet","sob"][t.getDay()];
 function renderList(nowIdx){
   const list=document.getElementById("sipxList");
   const fins=SIPXVIEW.map(x=>allInFor(x.p, blockAt(x.t))); // dejanska cena na rezino (po izbrani ločljivosti)
-  // barve in dolžine po ISTI lestvici kot stolpčni graf zgoraj (borzna cena, isti razpon)
-  const vps=(viewData().length?viewData():SIPXVIEW).map(x=>x.p);
-  const clo=Math.min(0,...vps), chi=Math.max(...vps,1);
+  // barve in dolžine po KONČNI ceni (kar dejansko plačaš), ne po borzni
+  const flo=Math.min(...fins), fhi=Math.max(...fins, flo+0.1);
   let html='<div class="shead"><div>ura</div><div>končna<br>c€/kWh</div><div>SIPX<br>€/MWh</div></div>', lastDay=null;
   for(let i=0;i<SIPXVIEW.length;i++){
     const it=SIPXVIEW[i], t=it.t, dk=`${t.getDate()}.${t.getMonth()+1}.`;
     if(dk!==lastDay){ html+=`<div style="padding:9px 8px 3px;font-family:var(--mono);font-size:13px;color:var(--faint)">${f2(t)} ${dk}</div>`; lastDay=dk; }
     const isNow=(i===nowIdx), isPast=(i<nowIdx), fin=fins[i];
-    const w=Math.max(2,Math.min(100,((it.p-clo)/((chi-clo)||1))*100));  // dolžina kot višina stolpca v grafu
-    const col=isPast?"#39424f":priceColor(it.p,clo,chi);                // barva enaka kot v grafu
+    const w=Math.max(2,Math.min(100,((fin-flo)/((fhi-flo)||1))*100));   // dolžina po končni ceni
+    const col=isPast?"#39424f":priceColor(fin,flo,fhi);                 // barva po končni ceni
     const tlab=isNow?"Zdaj":`${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`;
     html+=`<div class="srow${isNow?" now":""}"${isNow?' id="sipxNowRow"':''} data-p="${Math.round(it.p)}" data-f="${fin.toFixed(1)}" data-w="${w.toFixed(1)}" data-c="${col}" data-h="${t.getHours()}">`+
       `<div class="stime">${tlab}</div>`+

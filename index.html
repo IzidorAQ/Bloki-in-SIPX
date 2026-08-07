@@ -100,7 +100,7 @@
   .ecard.total .v{color:var(--energy)}
 
   /* SIPX chart */
-  .barwrap{position:relative;min-height:170px}
+  .barwrap{position:relative}
   svg{display:block;width:100%;height:auto;overflow:visible}
   .stats{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:14px;font-size:17px;color:var(--mut)}
   .stats .num{color:var(--ink);font-weight:700;font-size:20px}
@@ -249,7 +249,7 @@
         <button class="tab" data-r="15min" onclick="setPriceRes('15min')">15-min (trg)</button>
         <button class="tab on" data-r="hourly" onclick="setPriceRes('hourly')">urno (kot GEN-I)</button>
       </div>
-      <div class="barwrap" id="sipxChart"></div></div>
+      <div class="barwrap" id="sipxChart"></div>
       <div id="sipxList" class="sipxlist"></div>
       <details style="margin-top:12px">
         <summary style="cursor:pointer;color:var(--mut);font-size:12px;font-family:var(--mono)">Ročni vnos podatkov (če samodejni klic ne uspe)</summary>

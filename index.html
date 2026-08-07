@@ -651,6 +651,9 @@ async function loadSIPX(){
   const end=new Date(d);   end.setDate(d.getDate()+2);
   const ranged=`https://api.energy-charts.info/price?bzn=SI&start=${fmt(start)}&end=${fmt(end)}`;
   const latest=`https://api.energy-charts.info/price?bzn=SI`;   // tekoče okno: danes in jutri
+  const tmr=new Date(d); tmr.setDate(d.getDate()+1);
+  const dayAfter=new Date(d); dayAfter.setDate(d.getDate()+2);
+  const tomorrow=`https://api.energy-charts.info/price?bzn=SI&start=${fmt(tmr)}&end=${fmt(dayAfter)}`;
   const prox=u=>[`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
                  `https://corsproxy.io/?url=${encodeURIComponent(u)}`];
   const tried=[];
@@ -665,8 +668,8 @@ async function loadSIPX(){
     return null;
   }
   // OBA vira vzporedno in ju združi: "ranged" da zgodovino, "latest" pa današnji in jutrišnji dan
-  const [A,B]=await Promise.all([grab(ranged),grab(latest)]);
-  if(!A && !B){
+  const [A,B,C]=await Promise.all([grab(ranged),grab(latest),grab(tomorrow)]);
+  if(!A && !B && !C){
     stopWave(false);
     const blocked=/Failed to fetch|NetworkError|load failed/i.test(tried.join(" "));
     if(SIPXALL.length){
@@ -684,12 +687,12 @@ async function loadSIPX(){
     document.getElementById("sipxList").innerHTML="";
     return;
   }
-  ingestSIPX(mergeSIPX(A,B));
+  ingestSIPX(mergeSIPX(A,B,C));
 }
 // združi dva odgovora po časovni oznaki (novejši vir ima prednost pri podvojenih)
-function mergeSIPX(a,b){
+function mergeSIPX(...src){
   const m=new Map();
-  for(const j of [a,b]){
+  for(const j of src){
     if(!j) continue;
     const us=j.unix_seconds||[], pr=pricesOf(j);
     for(let i=0;i<us.length;i++) if(pr[i]!=null) m.set(us[i],pr[i]);
@@ -722,15 +725,27 @@ function ingestSIPX(j, isSeed){
     return;
   }
   SIPX_SOURCE = isSeed ? "seed" : "live";
-  SIPX={}; SIPXALL=[];
+  // DOPOLNI obstoječe: osvežitev, ki vrne manj podatkov, ne sme izbrisati že znanih
+  // (npr. jutrišnjih cen, če vir za tekoče okno trenutno odpove)
+  const keep=new Map();
+  SIPXALL.forEach(x=>keep.set(x.t.getTime(),x.p));
   for(let i=0;i<us.length;i++){
     if(pr[i]==null) continue;
     const t=new Date(new Date(us[i]*1000).toLocaleString("en-US",{timeZone:"Europe/Ljubljana"}));
-    const key=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")}`;
-    (SIPX[key]=SIPX[key]||[]).push({m:t.getHours()*60+t.getMinutes(),p:pr[i]});
-    SIPXALL.push({t,p:pr[i]});
+    keep.set(t.getTime(),pr[i]);                       // novi podatki prepišejo stare za isti čas
   }
-  SIPXALL.sort((a,b)=>a.t-b.t);
+  // obdrži okno od 9 dni nazaj do 2 dni naprej
+  const dNow=nowLjubljana();
+  const lo=new Date(dNow.getFullYear(),dNow.getMonth(),dNow.getDate()-9).getTime();
+  const hi=new Date(dNow.getFullYear(),dNow.getMonth(),dNow.getDate()+3).getTime();
+  SIPX={}; SIPXALL=[];
+  [...keep.keys()].sort((a,b)=>a-b).forEach(ms=>{
+    if(ms<lo||ms>=hi) return;
+    const t=new Date(ms), p=keep.get(ms);
+    const key=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")}`;
+    (SIPX[key]=SIPX[key]||[]).push({m:t.getHours()*60+t.getMinutes(),p});
+    SIPXALL.push({t,p});
+  });
   applyRes();
   const d=nowLjubljana();
   let cur=null; for(const pt of SIPXVIEW){ if(pt.t<=d) cur=pt; else break; }

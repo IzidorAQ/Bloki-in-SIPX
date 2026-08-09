@@ -358,7 +358,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-09 09:26</span>
+      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-09 16:08</span>
     </div>
 
   </div>
@@ -1558,7 +1558,7 @@ function scheduleGroup(groupCars, pool, future){
     let totalCost=0, unmet=0;
     order.forEach(car=>{
       const take=assign[car.id];
-      totalCost += take.reduce((a,x)=>a+x.price,0)/100*car.slotKwh;
+      totalCost += take.reduce((a,x)=>a+x.price*(x.frac||1),0)/100*car.slotKwh;
       unmet += (car.slots-take.length);
     });
     if(!best || unmet<best.unmet || (unmet===best.unmet && totalCost<best.totalCost)) best={order,totalCost,unmet,assign};
@@ -1567,13 +1567,14 @@ function scheduleGroup(groupCars, pool, future){
     const slots=(best.assign[car.id]||[]).slice().sort((a,b)=>a.t-b.t);
     const sessions=[];
     slots.forEach(s=>{
-      const last=sessions[sessions.length-1];
-      if(last && s.t.getTime()-last.end.getTime()===0){ last.end=new Date(s.t.getTime()+EV_STEP_MS); last.sum+=s.price; last.n++; }
-      else sessions.push({start:s.t, end:new Date(s.t.getTime()+EV_STEP_MS), sum:s.price, n:1});
+      const last=sessions[sessions.length-1]; const fr=s.frac||1;
+      if(last && s.t.getTime()-last.end.getTime()===0){ last.end=new Date(s.t.getTime()+EV_STEP_MS); last.sum+=s.price; last.wsum+=s.price*fr; last.n++; last.fracSum+=fr; }
+      else sessions.push({start:s.t, end:new Date(s.t.getTime()+EV_STEP_MS), sum:s.price, wsum:s.price*fr, n:1, fracSum:fr});
     });
-    const kwh=slots.length*car.slotKwh, costEUR=slots.reduce((a,x)=>a+x.price,0)/100*car.slotKwh;
-    const reachedSoc=Math.min(100, car.soc+(slots.length*car.slotKwh/car.batt)*100);
-    sessions.forEach(se=>{ se.kwh=se.n*car.slotKwh; se.costEUR=(se.sum/100)*car.slotKwh; se.avg=se.sum/se.n; });
+    const kwh=slots.reduce((a,x)=>a+car.slotKwh*(x.frac||1),0);
+    const costEUR=slots.reduce((a,x)=>a+x.price*(x.frac||1),0)/100*car.slotKwh;
+    const reachedSoc=Math.min(100, car.soc+(kwh/car.batt)*100);
+    sessions.forEach(se=>{ se.kwh=se.fracSum*car.slotKwh; se.costEUR=(se.wsum/100)*car.slotKwh; se.avg=se.sum/se.n; });
     return {car, sessions, kwh, costEUR, reachedSoc, reduced:car.slots<car.slotsFull, partial:slots.length<car.slots};
   }).filter(r=>r.sessions.length);
 
@@ -1588,7 +1589,7 @@ function scheduleGroup(groupCars, pool, future){
         if(free){ start=i; break; } }
       if(start>=0){
         let sum=0;
-        for(let k=0;k<tryLen;k++){ sum+=future[start+k].price; nblocked[start+k]=true; }
+        for(let k=0;k<tryLen;k++){ sum+=future[start+k].price*(future[start+k].frac||1); nblocked[start+k]=true; }
         naiveCost += (sum/100)*car.slotKwh;
         break;
       }
@@ -1603,11 +1604,15 @@ function calcEVSchedule(){
   const capRaw=parseFloat(document.getElementById("ev_cap").value);
   const cap = isNaN(capRaw) ? 15 : capRaw;   // c€/kWh - polni samo pod tem pragom
   const extOn = document.getElementById("ev_ext").checked;
-  // urne cene, kot jih obračuna GEN-I: povprečje četrturk na uro. Trenutna, delno pretekla ura
-  // se ne šteje - polnjenje lahko realno začne šele od naslednje polne ure naprej.
-  const hourStart=new Date(now); hourStart.setMinutes(0,0,0);
-  if(hourStart<=now) hourStart.setHours(hourStart.getHours()+1);
-  const future=hourlyAvg(SIPXALL.filter(x=>x.t>=hourStart)).map(x=>({t:x.t, spot:x.p, price:allInFor(x.p, blockAt(x.t))}));
+  // Polnjenje lahko realno začne na naslednjem 15-min intervalu, ne šele ob naslednji polni uri.
+  // Cena za tisto (morda le delno razpoložljivo) uro ostane urno povprečje, kot ga obračuna GEN-I -
+  // ta prva ura pa v razpored prispeva sorazmerno manj energije, kolikor je od nje še na voljo.
+  const startFrom=new Date(now);
+  startFrom.setMinutes(Math.ceil(startFrom.getMinutes()/15)*15, 0, 0);
+  if(startFrom<=now) startFrom.setMinutes(startFrom.getMinutes()+15);
+  const hourStart=new Date(startFrom); hourStart.setMinutes(0,0,0);
+  const firstFrac=(hourStart.getTime()+EV_STEP_MS-startFrom.getTime())/EV_STEP_MS;   // delež prve ure, ki je še na voljo
+  const future=hourlyAvg(SIPXALL.filter(x=>x.t>=hourStart)).map((x,i)=>({t:x.t, spot:x.p, price:allInFor(x.p, blockAt(x.t)), frac: i===0?firstFrac:1}));
   if(future.length<2){ out.innerHTML='<div class="err">Premalo prihodnjih cenovnih podatkov. Počakaj, da se cene naložijo (ali osveži stran).</div>'; document.getElementById("evPriceList").innerHTML=""; return; }
 
   // samo rezine POD pragom smejo biti uporabljene za polnjenje (pametno polnjenje: pavza nad pragom, nadaljevanje pod njim)
@@ -1669,13 +1674,13 @@ function calcEVSchedule(){
     }
   }
 
-  displayEVResult(future, results, naiveCost, capped, cap, skippedH, extOn);
-  renderEVPriceList(future, results);
+  displayEVResult(future, results, naiveCost, capped, cap, skippedH, extOn, startFrom);
+  renderEVPriceList(future, results, startFrom);
 }
 
 // seznam ur v istem slogu kot glavni SIPX seznam zgoraj, le z oznako katero
 // vozilo (če katero) polni ob tisti uri - barvne pikice ustrezajo barvam v tabeli/Gantt.
-function renderEVPriceList(future, results){
+function renderEVPriceList(future, results, startFrom){
   const el=document.getElementById("evPriceList"); if(!el) return;
   if(!future.length){ el.innerHTML=""; return; }
   const charge=new Map();  // uraTimestamp -> [car,...]
@@ -1697,8 +1702,9 @@ function renderEVPriceList(future, results){
     const col=priceColor(x.price,flo,fhi);
     const cars=charge.get(x.t.getTime())||[];
     const chips=cars.length ? `<div class="scars">${cars.map(c=>`<span style="background:${c.color}" title="${c.name}"></span>`).join("")}</div>` : `<span style="color:var(--faint);font-size:12px">-</span>`;
+    const partialTag = (x.frac<1) ? ` <span style="color:var(--faint);font-size:11px">(od ${String(startFrom.getHours()).padStart(2,"0")}:${String(startFrom.getMinutes()).padStart(2,"0")})</span>` : "";
     html+=`<div class="srow">`+
-      `<div class="stime">${String(x.t.getHours()).padStart(2,"0")}:00</div>`+
+      `<div class="stime">${String(x.t.getHours()).padStart(2,"0")}:00${partialTag}</div>`+
       `<div class="sfin" style="color:var(--energy)">${x.price.toFixed(1)}</div>`+
       `<div class="sprice" style="color:var(--ink)">${Math.round(x.spot)}</div>`+
       `<div class="sbarwrap"><div class="sbar" style="width:${w.toFixed(1)}%;background:${col}"></div></div>`+
@@ -1708,7 +1714,7 @@ function renderEVPriceList(future, results){
   el.innerHTML=html;
 }
 
-function displayEVResult(future, results, naiveCost, capped, cap, skippedH, extOn){
+function displayEVResult(future, results, naiveCost, capped, cap, skippedH, extOn, startFrom){
   const out=document.getElementById("evResult");
   const order={bmw:0,ioniq:1,mg:2};
   results=results.slice().sort((a,b)=>(order[a.car.id]??9)-(order[b.car.id]??9));
@@ -1718,6 +1724,9 @@ function displayEVResult(future, results, naiveCost, capped, cap, skippedH, extO
   const savingsPct= naiveCost>0.001 ? (savings/naiveCost*100) : 0;
   const hh=t=>`${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`;
   const dd=t=>`${f2(t)} ${t.getDate()}.${t.getMonth()+1}.`;
+  // prva cenovna ura je lahko le delno na voljo (polnjenje se sme začeti šele ob naslednji četrturi)
+  const firstHourT = future.length && future[0].frac<1 ? future[0].t.getTime() : null;
+  const dispStart = t => (firstHourT!=null && t.getTime()===firstHourT) ? startFrom : t;
   const usedExt=results.some(r=>r.sessions.some(se=>se.ext));
   let rows="";
   results.forEach(r=>{
@@ -1726,10 +1735,10 @@ function displayEVResult(future, results, naiveCost, capped, cap, skippedH, extO
       : r.reduced ? ` <span style="color:var(--b2)">(do ${Math.round(r.reachedSoc)} % namesto ${p.tgt} %, premalo poceni ur)</span>`
       : '';
     const winTxt = r.sessions.length===1
-      ? `${dd(r.sessions[0].start)} ${hh(r.sessions[0].start)}&ndash;${hh(r.sessions[0].end)}${dd(r.sessions[0].end)!==dd(r.sessions[0].start)?" "+dd(r.sessions[0].end):""}${r.sessions[0].ext?' <span style="color:var(--faint)">(20 m kabel)</span>':''}`
-      : `${r.sessions.length} okna: `+r.sessions.map(se=>`${dd(se.start)} ${hh(se.start)}&ndash;${hh(se.end)}${se.ext?"*":""}`).join(", ");
+      ? `${dd(dispStart(r.sessions[0].start))} ${hh(dispStart(r.sessions[0].start))}&ndash;${hh(r.sessions[0].end)}${dd(r.sessions[0].end)!==dd(dispStart(r.sessions[0].start))?" "+dd(r.sessions[0].end):""}${r.sessions[0].ext?' <span style="color:var(--faint)">(20 m kabel)</span>':''}`
+      : `${r.sessions.length} okna: `+r.sessions.map(se=>`${dd(dispStart(se.start))} ${hh(dispStart(se.start))}&ndash;${hh(se.end)}${se.ext?"*":""}`).join(", ");
     const avgPrice = r.kwh>0 ? (r.costEUR/r.kwh*100) : 0;
-    const durH = r.sessions.reduce((a,se)=>a+(se.end-se.start)/3600000,0);
+    const durH = r.sessions.reduce((a,se)=>a+(se.end-dispStart(se.start))/3600000,0);
     rows+=`<tr><td><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${p.color};margin-right:6px"></span>${p.name}${tag}</td>`+
       `<td style="font-size:13px">${winTxt}</td>`+
       `<td>${durH.toFixed(1)} h</td><td>${r.kwh.toFixed(1)} kWh</td>`+

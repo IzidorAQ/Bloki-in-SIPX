@@ -358,7 +358,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-09 09:07</span>
+      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-09 09:26</span>
     </div>
 
   </div>
@@ -1526,18 +1526,41 @@ function scheduleGroup(groupCars, pool, future){
     cars.forEach((c,i)=>{ c.slots=Math.max(1,Math.min(c.slotsFull,base[i])); });
     cars=cars.filter(c=>c.slots>0);
   }
+  // Izberi CELOTNO množico "aktivnih" ur: najcenejših N=vsota potreb iz nabora, ne glede na avto.
+  // Nato jih znotraj naravnih strnjenih tekov (brez vrzeli) zapolni PO VRSTNEM REDU avtomobilov,
+  // namesto da bi vsak avto neodvisno pobiral svoje najcenejše ure - slednje bi pri skoraj enakih
+  // cenah vodilo v nesmiselno preklapljanje med avtoma za zanemarljiv prihranek.
+  const totalSlots=cars.reduce((a,c)=>a+c.slots,0);
+  const activeSet=new Set(pool.slice().sort((a,b)=>a.price-b.price).slice(0,totalSlots).map(x=>x.t.getTime()));
+  const activeChrono=pool.filter(x=>activeSet.has(x.t.getTime())).sort((a,b)=>a.t-b.t);
+  const runs=[];
+  activeChrono.forEach(x=>{
+    const last=runs[runs.length-1];
+    if(last && x.t.getTime()-last[last.length-1].t.getTime()===EV_STEP_MS) last.push(x);
+    else runs.push([x]);
+  });
+
   let best=null;
   permute(cars).forEach(order=>{
-    const used=new Set();
-    let totalCost=0, unmet=0, assign={};
-    for(const car of order){
-      const avail=pool.filter(x=>!used.has(x.t.getTime())).sort((a,b)=>a.price-b.price);
-      const take=avail.slice(0, car.slots);
-      take.forEach(x=>used.add(x.t.getTime()));
-      const costEUR=take.reduce((a,x)=>a+x.price,0)/100*car.slotKwh;
-      totalCost+=costEUR; unmet+=(car.slots-take.length);
-      assign[car.id]=take;
-    }
+    const remain={}; order.forEach(c=>remain[c.id]=c.slots);
+    const assign={}; order.forEach(c=>assign[c.id]=[]);
+    runs.forEach(run=>{
+      let i=0, oi=0;
+      while(i<run.length && oi<order.length){
+        const car=order[oi];
+        if(remain[car.id]<=0){ oi++; continue; }
+        const take=Math.min(remain[car.id], run.length-i);
+        for(let k=0;k<take;k++) assign[car.id].push(run[i+k]);
+        remain[car.id]-=take; i+=take;
+        if(remain[car.id]<=0) oi++;
+      }
+    });
+    let totalCost=0, unmet=0;
+    order.forEach(car=>{
+      const take=assign[car.id];
+      totalCost += take.reduce((a,x)=>a+x.price,0)/100*car.slotKwh;
+      unmet += (car.slots-take.length);
+    });
     if(!best || unmet<best.unmet || (unmet===best.unmet && totalCost<best.totalCost)) best={order,totalCost,unmet,assign};
   });
   const results=cars.map(car=>{

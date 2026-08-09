@@ -221,6 +221,13 @@
   .evsum{margin-top:12px;font-size:15px;color:var(--mut);line-height:1.6}
   .evbtn{font-family:var(--mono);font-size:16px;padding:10px 18px;border-radius:9px;background:var(--energy);
     color:#06201d;font-weight:700;border:none;cursor:pointer;margin-top:14px}
+  .evlist{margin-top:16px}
+  .evlist .shead,.evlist .srow{grid-template-columns:minmax(0,0.8fr) minmax(0,0.95fr) minmax(0,0.85fr) minmax(0,0.9fr)}
+  .evlist .scars{display:flex;gap:4px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
+  .evlist .scars span{width:9px;height:9px;border-radius:50%;display:inline-block}
+  @media(max-width:560px){
+    .evlist .shead,.evlist .srow{grid-template-columns:minmax(0,0.8fr) minmax(0,0.95fr) minmax(0,0.85fr) minmax(0,0.9fr)}
+  }
 </style>
 </head>
 <body>
@@ -346,11 +353,12 @@
       </div>
       <button class="evbtn" onclick="calcEVSchedule()">Izračunaj razpored</button>
       <div id="evResult"></div>
+      <div class="sipxlist evlist" id="evPriceList"></div>
       <div class="note" id="evnote">Uporablja že naložene cene (danes, in jutri, ko so objavljene) ter dejansko tarifno postavko omrežnine glede na uro. Dva vzporedna vira: 11 kW polnilnica si delita BMW in MG (eden naenkrat, algoritem izbere vrstni red), Hyundai polni neodvisno na svoji 2 kW vtičnici in ne čaka na druga dva. Privzeti izkoristek AC polnjenja je 90 % (izgube v polnilniku in bateriji). Kapaciteto baterij, moč polnjenja in vire lahko po potrebi prilagodiš v kodi (EV_CARS, POINTS).</div>
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-09 08:47</span>
+      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-09 09:07</span>
     </div>
 
   </div>
@@ -1467,7 +1475,8 @@ const EV_CARS=[
   {id:"ioniq", name:"Hyundai Ioniq Electric", sub:"2022 · baterija 38,3 kWh · 2 kW vtičnica (lastna, vzporedno)",     batt:38.3, maxPower:7.2,  point:"sock", color:"#37bd5b"},
   {id:"mg",    name:"MG ZS EV Standard",      sub:"2025 · baterija 49,0 kWh · 11 kW polnilnica (deli z BMW, 6,6 kW zmožnost vozila)", batt:49.0, maxPower:6.6, point:"wb", color:"#c86bff"}
 ];
-const EV_EFF=0.90; // izkoristek AC polnjenja (izgube v polnilniku in bateriji)
+const EV_EFF=0.90;          // izkoristek AC polnjenja (izgube v polnilniku in bateriji)
+const EV_STEP_MS=3600000;  // urni koraki - cena kot pri GEN-I (aritmetično povprečje četrturk na uro)
 
 function renderEVCars(){
   const box=document.getElementById("evCars"); if(!box) return;
@@ -1536,8 +1545,8 @@ function scheduleGroup(groupCars, pool, future){
     const sessions=[];
     slots.forEach(s=>{
       const last=sessions[sessions.length-1];
-      if(last && s.t.getTime()-last.end.getTime()===0){ last.end=new Date(s.t.getTime()+15*60000); last.sum+=s.price; last.n++; }
-      else sessions.push({start:s.t, end:new Date(s.t.getTime()+15*60000), sum:s.price, n:1});
+      if(last && s.t.getTime()-last.end.getTime()===0){ last.end=new Date(s.t.getTime()+EV_STEP_MS); last.sum+=s.price; last.n++; }
+      else sessions.push({start:s.t, end:new Date(s.t.getTime()+EV_STEP_MS), sum:s.price, n:1});
     });
     const kwh=slots.length*car.slotKwh, costEUR=slots.reduce((a,x)=>a+x.price,0)/100*car.slotKwh;
     const reachedSoc=Math.min(100, car.soc+(slots.length*car.slotKwh/car.batt)*100);
@@ -1571,15 +1580,19 @@ function calcEVSchedule(){
   const capRaw=parseFloat(document.getElementById("ev_cap").value);
   const cap = isNaN(capRaw) ? 15 : capRaw;   // c€/kWh - polni samo pod tem pragom
   const extOn = document.getElementById("ev_ext").checked;
-  const future=SIPXALL.filter(x=>x.t>=new Date(now.getFullYear(),now.getMonth(),now.getDate(),now.getHours(),Math.floor(now.getMinutes()/15)*15))
-    .map(x=>({t:x.t, price:allInFor(x.p, blockAt(x.t))}));  // c€/kWh, po dejanskem bloku vsake rezine
-  if(future.length<4){ out.innerHTML='<div class="err">Premalo prihodnjih cenovnih podatkov. Počakaj, da se cene naložijo (ali osveži stran).</div>'; return; }
+  // urne cene, kot jih obračuna GEN-I: povprečje četrturk na uro. Trenutna, delno pretekla ura
+  // se ne šteje - polnjenje lahko realno začne šele od naslednje polne ure naprej.
+  const hourStart=new Date(now); hourStart.setMinutes(0,0,0);
+  if(hourStart<=now) hourStart.setHours(hourStart.getHours()+1);
+  const future=hourlyAvg(SIPXALL.filter(x=>x.t>=hourStart)).map(x=>({t:x.t, spot:x.p, price:allInFor(x.p, blockAt(x.t))}));
+  if(future.length<2){ out.innerHTML='<div class="err">Premalo prihodnjih cenovnih podatkov. Počakaj, da se cene naložijo (ali osveži stran).</div>'; document.getElementById("evPriceList").innerHTML=""; return; }
 
   // samo rezine POD pragom smejo biti uporabljene za polnjenje (pametno polnjenje: pavza nad pragom, nadaljevanje pod njim)
   const poolAll=future.filter(x=>x.price<cap);
-  const skippedH=((future.length-poolAll.length)*0.25);
+  const skippedH=(future.length-poolAll.length);   // vsaka enota je zdaj ena ura
   if(!poolAll.length){
     out.innerHTML=`<div class="err">V naloženem oknu ni nobene ure s končno ceno pod ${cap} c€/kWh. Zvišaj prag ali počakaj na cenejše ure.</div>`;
+    document.getElementById("evPriceList").innerHTML="";
     return;
   }
 
@@ -1588,12 +1601,12 @@ function calcEVSchedule(){
     const tgt=Math.max(0,Math.min(100,parseFloat(document.getElementById("ev_tgt_"+c.id).value)||0));
     const needKwh=Math.max(0,(tgt-soc)/100*c.batt);
     const power=Math.min(c.maxPower, POINTS[c.point]);   // omeji z virom (npr. Hyundai 7,2 kW avto na 2 kW vtičnici)
-    const slotKwh=power*0.25*EV_EFF;
+    const slotKwh=power*EV_EFF;   // energija na URO (EV_STEP_MS)
     const slots=needKwh>0 ? Math.ceil(needKwh/slotKwh) : 0;
     return {...c, soc, tgt, needKwh, power, slotKwh, slots};
   }).filter(c=>c.slots>0);
 
-  if(!cars.length){ out.innerHTML='<div class="note">Vsi avtomobili so že na ciljnem SOC ali nad njim, polnjenje ni potrebno.</div>'; return; }
+  if(!cars.length){ out.innerHTML='<div class="note">Vsi avtomobili so že na ciljnem SOC ali nad njim, polnjenje ni potrebno.</div>'; document.getElementById("evPriceList").innerHTML=""; return; }
 
   // dva NEODVISNA vzporedna vira: wb (BMW+MG si delita) in sock (Hyundai sam),
   // vsak dobi svojo neodvisno kopijo poceni rezin, saj gre za ločena tokokroga
@@ -1611,12 +1624,12 @@ function calcEVSchedule(){
     const mgWb=results.find(r=>r.car.id==="mg");
     if(mgOrig && mgWb && (mgWb.reduced||mgWb.partial)){
       const extPower=Math.min(mgOrig.maxPower, POINTS.ext);
-      const extSlotKwh=extPower*0.25*EV_EFF;
+      const extSlotKwh=extPower*EV_EFF;   // energija na URO
       const remainingKwh=Math.max(0,(mgOrig.tgt-mgWb.reachedSoc)/100*mgOrig.batt);
       const extSlots=remainingKwh>0 ? Math.ceil(remainingKwh/extSlotKwh) : 0;
       if(extSlots>0){
         const usedT=new Set(mgWb.sessions.flatMap(se=>{
-          const arr=[]; for(let t=se.start.getTime(); t<se.end.getTime(); t+=9e5) arr.push(t); return arr;
+          const arr=[]; for(let t=se.start.getTime(); t<se.end.getTime(); t+=EV_STEP_MS) arr.push(t); return arr;
         }));
         const extPoolCar={...mgOrig, id:"mg_ext", soc:mgWb.reachedSoc, power:extPower, slotKwh:extSlotKwh, slots:extSlots};
         const extPool=poolAll.filter(x=>!usedT.has(x.t.getTime()));
@@ -1634,6 +1647,42 @@ function calcEVSchedule(){
   }
 
   displayEVResult(future, results, naiveCost, capped, cap, skippedH, extOn);
+  renderEVPriceList(future, results);
+}
+
+// seznam ur v istem slogu kot glavni SIPX seznam zgoraj, le z oznako katero
+// vozilo (če katero) polni ob tisti uri - barvne pikice ustrezajo barvam v tabeli/Gantt.
+function renderEVPriceList(future, results){
+  const el=document.getElementById("evPriceList"); if(!el) return;
+  if(!future.length){ el.innerHTML=""; return; }
+  const charge=new Map();  // uraTimestamp -> [car,...]
+  results.forEach(r=>{
+    r.sessions.forEach(se=>{
+      for(let t=se.start.getTime(); t<se.end.getTime(); t+=EV_STEP_MS){
+        if(!charge.has(t)) charge.set(t,[]);
+        charge.get(t).push(r.car);
+      }
+    });
+  });
+  const prices=future.map(x=>x.price);
+  const flo=Math.min(...prices), fhi=Math.max(...prices, flo+0.1);
+  let html='<div class="shead"><div>ura</div><div>končna<br>c€/kWh</div><div>SIPX<br>€/MWh</div><div>vozilo</div></div>', lastDay=null;
+  future.forEach(x=>{
+    const dk=`${x.t.getDate()}.${x.t.getMonth()+1}.`;
+    if(dk!==lastDay){ html+=`<div style="padding:9px 8px 3px;font-family:var(--mono);font-size:13px;color:var(--faint)">${f2(x.t)} ${dk}</div>`; lastDay=dk; }
+    const w=Math.max(2,Math.min(100,((x.price-flo)/((fhi-flo)||1))*100));
+    const col=priceColor(x.price,flo,fhi);
+    const cars=charge.get(x.t.getTime())||[];
+    const chips=cars.length ? `<div class="scars">${cars.map(c=>`<span style="background:${c.color}" title="${c.name}"></span>`).join("")}</div>` : `<span style="color:var(--faint);font-size:12px">-</span>`;
+    html+=`<div class="srow">`+
+      `<div class="stime">${String(x.t.getHours()).padStart(2,"0")}:00</div>`+
+      `<div class="sfin" style="color:var(--energy)">${x.price.toFixed(1)}</div>`+
+      `<div class="sprice" style="color:var(--ink)">${Math.round(x.spot)}</div>`+
+      `<div class="sbarwrap"><div class="sbar" style="width:${w.toFixed(1)}%;background:${col}"></div></div>`+
+      chips+
+      `</div>`;
+  });
+  el.innerHTML=html;
 }
 
 function displayEVResult(future, results, naiveCost, capped, cap, skippedH, extOn){
@@ -1682,7 +1731,7 @@ function displayEVResult(future, results, naiveCost, capped, cap, skippedH, extO
 
 function renderEVGantt(containerId, future, results){
   const el=document.getElementById(containerId); if(!el||!future.length||!results.length) return;
-  const t0=future[0].t.getTime(), t1=future[future.length-1].t.getTime()+15*60000;
+  const t0=future[0].t.getTime(), t1=future[future.length-1].t.getTime()+EV_STEP_MS;
   const rowH=28, gap=6, pl=6, prr=6, pt=8, axisH=18;
   const W=1000, H=pt+results.length*(rowH+gap)+axisH;
   const iw=W-pl-prr;

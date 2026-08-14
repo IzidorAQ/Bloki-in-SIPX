@@ -358,7 +358,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-09 16:08</span>
+      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-14 12:11</span>
     </div>
 
   </div>
@@ -701,7 +701,37 @@ async function tryFetchJSON(url){
     return {data:await r.json()};
   }catch(e){ clearTimeout(t); return {err:e.name==="AbortError"?"časovna omejitev":e.message}; }
 }
+// preveri, ali že imamo (skoraj) celoten jutrišnji dan - če da, ni potrebe po ponovnem nalaganju
+function haveTomorrow(){
+  if(!SIPXALL.length) return false;
+  const d=nowLjubljana();
+  const tomorrowEnd=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1,23,0,0).getTime();
+  return SIPXALL[SIPXALL.length-1].t.getTime()>=tomorrowEnd;
+}
+const SIPX_CACHE_KEY="sipxCacheV1";
+function saveSIPXCache(){
+  try{
+    localStorage.setItem(SIPX_CACHE_KEY, JSON.stringify({
+      unix_seconds: SIPXALL.map(x=>Math.floor(x.t.getTime()/1000)),
+      price: SIPXALL.map(x=>x.p)
+    }));
+  }catch(e){ /* zaseben način ali poln localStorage - ni usodno, samo brez predpomnjenja */ }
+}
+// naloži shranjene cene takoj ob zagonu (brez čakanja na omrežje); vrne true, če je uspelo
+function loadSIPXCache(){
+  try{
+    const raw=localStorage.getItem(SIPX_CACHE_KEY);
+    if(!raw) return false;
+    const j=JSON.parse(raw);
+    if(!j || !(j.unix_seconds||[]).length) return false;
+    ingestSIPX(j);
+    return true;
+  }catch(e){ return false; }
+}
 async function loadSIPX(){
+  // SIPX cene za jutri objavijo med 13. in 14. uro; dokler imamo (skoraj) cel jutrišnji dan,
+  // ponovno nalaganje ni potrebno - samodejno se znova preveri šele, ko se datum premakne naprej.
+  if(haveTomorrow()) return;
   const box=document.getElementById("sipxChart");
   if(!SIPXALL.length) startWave();
   const d=nowLjubljana();
@@ -813,6 +843,7 @@ function ingestSIPX(j, isSeed){
   renderCore();
   renderSIPX();
   if(!isSeed && typeof computeForecast==="function") computeForecast(); // prekalibriraj z živimi cenami, brez novega klica na vreme
+  saveSIPXCache();
 }
 function ingestPaste(){
   const ta=document.getElementById("sipxPaste");
@@ -1821,7 +1852,8 @@ updateAlertUI();
 startWave();
 renderEVCars();
 setInterval(renderCore,1000); // sekundna ura + preračun bloka + cene + preverjanje praga
-loadSIPX();                    // naloži žive cene (8-dnevno okno)
+loadSIPXCache();               // takoj prikaži shranjene cene, brez čakanja na omrežje
+loadSIPX();                    // osveži, le če predpomnilnik še nima jutrišnjega dne
 loadForecast();
 loadWeather15();
 setInterval(loadSIPX, 1000*60*15);

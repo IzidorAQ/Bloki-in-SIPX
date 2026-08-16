@@ -272,6 +272,7 @@
     <!-- SIPX -->
     <section class="panel">
       <h2>SIPX day-ahead &middot; borzna cena energije <span id="sipxRange" style="color:var(--faint);font-family:var(--mono);font-size:11px"></span></h2>
+      <div id="sipxWarn" style="display:none"></div>
       <div class="stats" id="sipxStats"></div>
       <div class="tabs" id="sipxToggle">
         <button class="tab on" data-v="td" onclick="setSipxView('td')">Danes in jutri</button>
@@ -349,7 +350,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-15 22:44</span>
+      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-16 12:21</span>
     </div>
 
   </div>
@@ -719,6 +720,18 @@ function loadSIPXCache(){
     return true;
   }catch(e){ return false; }
 }
+// viden opozorilni pas, ki ga ni mogoče spregledati (namesto majhnega napisa ob datumu)
+function showSIPXWarning(msg){
+  const el=document.getElementById("sipxWarn"); if(!el) return;
+  el.style.display="block";
+  el.innerHTML=`<div class="err" style="margin-bottom:12px">${msg} `+
+    `<button class="tab" style="padding:4px 10px;margin-left:6px" onclick="loadSIPX()">poskusi znova</button> `+
+    `<button class="tab" style="padding:4px 10px" onclick="clearSIPXCacheAndReload()">počisti in osveži stran</button></div>`;
+}
+function clearSIPXCacheAndReload(){
+  try{ localStorage.removeItem(SIPX_CACHE_KEY); }catch(e){}
+  location.reload();
+}
 async function loadSIPX(){
   // SIPX cene za jutri objavijo med 13. in 14. uro; dokler imamo (skoraj) cel jutrišnji dan,
   // ponovno nalaganje ni potrebno - samodejno se znova preveri šele, ko se datum premakne naprej.
@@ -754,9 +767,7 @@ async function loadSIPX(){
     stopWave(false);
     const blocked=/Failed to fetch|NetworkError|load failed/i.test(tried.join(" "));
     if(SIPXALL.length){
-      const rng=document.getElementById("sipxRange");
-      rng.innerHTML+=` <span style="color:var(--b2)">&middot; osvežitev ni uspela</span> `+
-        `<button class="tab" style="padding:2px 8px" onclick="loadSIPX()">znova</button>`;
+      showSIPXWarning(`Osvežitev cen ni uspela${haveTomorrow()?"":" - jutrišnjih cen še nima"}. Prikazani so zadnji znani podatki.`);
       return;
     }
     box.innerHTML=`<div class="err">SIPX ni dosegljiv.`+
@@ -833,6 +844,7 @@ function ingestSIPX(j, isSeed){
   SIPXnow = cur?cur.p:null;
   renderCore();
   renderSIPX();
+  const warnEl=document.getElementById("sipxWarn"); if(warnEl){ warnEl.style.display="none"; warnEl.innerHTML=""; }
   if(!isSeed && typeof computeForecast==="function") computeForecast(); // prekalibriraj z živimi cenami, brez novega klica na vreme
   saveSIPXCache();
 }

@@ -273,6 +273,10 @@
     <section class="panel">
       <h2>SIPX day-ahead &middot; borzna cena energije <span id="sipxRange" style="color:var(--faint);font-family:var(--mono);font-size:11px"></span></h2>
       <div id="sipxWarn" style="display:none"></div>
+      <div id="tmrNotifyBar" style="margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <button class="tab" id="tmrNotifyBtn" onclick="toggleTomorrowNotify()">Obvesti me, ko so cene za jutri na voljo</button>
+        <span id="tmrNotifyStat" style="font-size:12px;color:var(--faint)"></span>
+      </div>
       <div class="stats" id="sipxStats"></div>
       <div class="tabs" id="sipxToggle">
         <button class="tab on" data-v="td" onclick="setSipxView('td')">Danes in jutri</button>
@@ -350,7 +354,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-16 12:21</span>
+      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-17 12:47</span>
     </div>
 
   </div>
@@ -630,6 +634,33 @@ function card(lab,v,u,total){
     `<div class="v">${v}</div><div class="u">${u}</div></div>`;
 }
 /* ----- Obvestila ob spremembi cene ----- */
+let tmrNotifyOn=false, hadTomorrow=null;
+function updateTmrNotifyUI(){
+  const btn=document.getElementById("tmrNotifyBtn"); if(!btn) return;
+  btn.classList.toggle("on",tmrNotifyOn);
+  btn.textContent=tmrNotifyOn?"Obveščanje vklopljeno":"Obvesti me, ko so cene za jutri na voljo";
+  const stat=document.getElementById("tmrNotifyStat");
+  if(stat) stat.textContent = tmrNotifyOn
+    ? (haveTomorrow()?"Jutrišnje cene so že tu.":"Stran preverja pogosteje, dokler jih ne dobi. Mora ostati odprta.")
+    : "";
+}
+function toggleTomorrowNotify(){
+  if(!("Notification" in window)){ const s=document.getElementById("tmrNotifyStat"); if(s) s.textContent="Brskalnik ne podpira obvestil."; return; }
+  if(tmrNotifyOn){ tmrNotifyOn=false; updateTmrNotifyUI(); return; }
+  Notification.requestPermission().then(p=>{
+    if(p==="granted"){ tmrNotifyOn=true; hadTomorrow=haveTomorrow(); updateTmrNotifyUI(); }
+    else { const s=document.getElementById("tmrNotifyStat"); if(s) s.textContent="Obvestila niso dovoljena v nastavitvah brskalnika."; }
+  });
+}
+// zazna prehod "se ni imel jutri" -> "zdaj ima jutri" in obvesti, ce je uporabnik to vklopil
+function checkTomorrowNotify(){
+  const now=haveTomorrow();
+  if(tmrNotifyOn && hadTomorrow===false && now===true){
+    try{ new Notification("Cene za jutri so na voljo",{body:"SIPX cene za jutri so objavljene in prikazane.",tag:"sipx-jutri"}); }catch(e){}
+  }
+  hadTomorrow=now;
+  updateTmrNotifyUI();
+}
 let notifyOn=false, priceState=null;
 function setAlertStat(t){ const e=document.getElementById("alertStat"); if(e) e.textContent=t; }
 function updateAlertUI(){
@@ -847,6 +878,7 @@ function ingestSIPX(j, isSeed){
   const warnEl=document.getElementById("sipxWarn"); if(warnEl){ warnEl.style.display="none"; warnEl.innerHTML=""; }
   if(!isSeed && typeof computeForecast==="function") computeForecast(); // prekalibriraj z živimi cenami, brez novega klica na vreme
   saveSIPXCache();
+  checkTomorrowNotify();
 }
 function ingestPaste(){
   const ta=document.getElementById("sipxPaste");
@@ -1836,6 +1868,7 @@ function renderEVGantt(containerId, future, results){
 /* velikost pisave: 5 stopenj, izbira se ohrani med obiski */
 renderCore();
 updateAlertUI();
+updateTmrNotifyUI();
 startWave();
 renderEVCars();
 setInterval(renderCore,1000); // sekundna ura + preračun bloka + cene + preverjanje praga
@@ -1843,7 +1876,23 @@ loadSIPXCache();               // takoj prikaži shranjene cene, brez čakanja n
 loadSIPX();                    // osveži, le če predpomnilnik še nima jutrišnjega dne
 loadForecast();
 loadWeather15();
-setInterval(loadSIPX, 1000*60*15);
+// prilagodljivo preverjanje: pogosteje (3 min), dokler nimamo jutrišnjega dne; sicer redko (15 min)
+// pametno preverjanje: ko že imamo cel jutrišnji dan, nova dražba (za nov "jutri") se poravna
+// šele okoli 13. ure NASLEDNJEGA dne - do takrat ni smisla preverjati. Stran se "uspava" natanko
+// do tja, z majhnim zamikom, namesto da bi vsakih 15 minut preverjala brez potrebe. Dokler
+// objave še ni (ali je zamujena, kot se občasno zgodi), preverja pogosteje na 3 minute.
+function scheduleNextSIPXCheck(){
+  let delay;
+  if(haveTomorrow()){
+    const d=nowLjubljana();
+    const wake=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1,13,5,0); // jutri malo po 13h
+    delay=Math.max(1000*60*5, wake.getTime()-d.getTime());
+  } else {
+    delay=1000*60*3;
+  }
+  setTimeout(async ()=>{ await loadSIPX(); scheduleNextSIPXCheck(); }, delay);
+}
+scheduleNextSIPXCheck();
 let rsTo=null;
 addEventListener("resize",()=>{ clearTimeout(rsTo); rsTo=setTimeout(()=>{ if(SIPXVIEW.length) drawSipxView(); },250); });
 setInterval(loadWeather15, 1000*60*60*3);

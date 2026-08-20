@@ -354,7 +354,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-17 12:47</span>
+      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-20 07:41</span>
     </div>
 
   </div>
@@ -1133,17 +1133,23 @@ function solveLin(A,b){
 }
 function ols(X,y){
   const n=X.length, p=X[0].length; // X[i] = [1, x1, x2, ...]
-  const mu=new Array(p).fill(0), sd=new Array(p).fill(1);
+  const mu=new Array(p).fill(0), sd=new Array(p).fill(1), degen=new Array(p).fill(false);
   for(let j=1;j<p;j++){ let m=0; for(let i=0;i<n;i++) m+=X[i][j]; m/=n; mu[j]=m;
-    let v=0; for(let i=0;i<n;i++) v+=(X[i][j]-m)**2; sd[j]=Math.sqrt(v/n)||1; }
-  const Z=X.map(r=>r.map((v,j)=>j===0?1:(v-mu[j])/sd[j])); // standardiziraj za stabilnost
+    let v=0; for(let i=0;i<n;i++) v+=(X[i][j]-m)**2;
+    const s=Math.sqrt(v/n);
+    // stolpec brez razpršenosti (vedno enaka vrednost) ne nosi informacije;
+    // brez te zaščite ga skoraj singularen sistem lahko razpihne v nesmiseln koeficient
+    if(s<1e-9){ degen[j]=true; sd[j]=1; } else sd[j]=s;
+  }
+  const Z=X.map(r=>r.map((v,j)=>(j===0||degen[j])?(j===0?1:0):(v-mu[j])/sd[j])); // standardiziraj za stabilnost
   const A=Array.from({length:p},()=>new Array(p).fill(0)), b=new Array(p).fill(0);
   for(let i=0;i<n;i++) for(let j=0;j<p;j++){ b[j]+=Z[i][j]*y[i]; for(let k=0;k<p;k++) A[j][k]+=Z[i][j]*Z[i][k]; }
   for(let j=0;j<p;j++) A[j][j]+=1e-6;
   const g=solveLin(A,b); if(!g) return null;
   const beta=new Array(p); let b0=g[0];
-  for(let j=1;j<p;j++){ beta[j]=g[j]/sd[j]; b0-=beta[j]*mu[j]; }
-  beta[0]=b0; return beta; // koeficienti v izvirnih enotah
+  for(let j=1;j<p;j++){ beta[j]=degen[j]?0:g[j]/sd[j]; b0-=beta[j]*mu[j]; }
+  beta[0]=b0;
+  return beta.every(Number.isFinite)?beta:null; // koeficienti v izvirnih enotah
 }
 function r2(X,y,beta){
   const yb=y.reduce((a,b)=>a+b,0)/y.length; let ss=0,st=0;
@@ -1195,12 +1201,12 @@ function computeForecast(){
   }
   const keyOf=f=>{ const [Y,M,D]=f.date.split("-").map(Number); return `${Y}-${M}-${D}-${f.hr}`; };
   const X=[],Y=[],trainDays=new Set();
-  feat.forEach(f=>{ const p=act[keyOf(f)]; if(p!=null){ X.push([1,f.wind,f.solar,f.demand]); Y.push(p); trainDays.add(f.date); } });
+  feat.forEach(f=>{ const p=act[keyOf(f)]; if(p!=null){ X.push([1,f.wind,f.solar,f.demand,f.free?1:0]); Y.push(p); trainDays.add(f.date); } });
   let beta=null,fit=null;
   if(X.length>=8){ beta=ols(X,Y); if(beta) fit=r2(X,Y,beta); }
   feat.forEach(f=>{ const a=act[keyOf(f)];
     f.actual=a!=null?a:null;
-    f.pred=beta?(beta[0]+beta[1]*f.wind+beta[2]*f.solar+beta[3]*f.demand):null;
+    f.pred=beta?(beta[0]+beta[1]*f.wind+beta[2]*f.solar+beta[3]*f.demand+beta[4]*(f.free?1:0)):null;
   });
   renderForecast(feat,beta,fit,X.length,[...trainDays].sort());
 }
@@ -1273,9 +1279,9 @@ function renderForecast(feat,beta,fit,nTrain,trainDays){
   document.getElementById("fcnote").innerHTML=
     `Dnevi z že objavljenimi borznimi cenami (danes in jutri po cca. 13h) prikazujejo dejansko ceno trga, ne napovedi. `+
     `Za dni naprej je prikazana ocena modela: večkratna regresija cene na veter (100 m), sončno obsevanje in profil porabe `+
-    `(nižji in bolj raven ob vikendih in praznikih) v DE, AT, sev. Italiji, HU, HR in SI, uteženo. ${fitTxt} `+
+    `(nižji in bolj raven ob vikendih in praznikih) ter izrecno spremenljivko za dela prost dan v DE, AT, sev. Italiji, HU, HR in SI, uteženo. ${fitTxt} `+
     `Stolpci so urne cene (barva = poceni&#8594;drago), bela črta označuje trenutno uro. `+
-    `${beta?`Koef.: veter ${beta[1].toFixed(1)}, sonce ${beta[2].toFixed(2)}, poraba ${beta[3].toFixed(0)} €/MWh. `:``}`+
+    `${beta?`Koef.: veter ${beta[1].toFixed(1)}, sonce ${beta[2].toFixed(2)}, poraba ${beta[3].toFixed(0)}, prosti dan ${beta[4].toFixed(1)} €/MWh. `:``}`+
     `Groba ocena, ne tržna napoved. Vir vremena: Open-Meteo.`;
 }
 

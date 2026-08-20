@@ -151,6 +151,18 @@
   .fcd .ft .gd{color:var(--energy)}
   .fcd .drv{display:grid;grid-template-columns:1fr 1fr;gap:5px 12px;margin-top:11px;padding-top:11px;border-top:1px solid var(--line);font-size:14px;color:var(--mut);font-family:var(--mono)}
   .fcd .drv b{color:var(--ink);font-weight:700}
+  .fcd details{margin-top:10px;border-top:1px solid var(--line);padding-top:9px}
+  .fcd summary{cursor:pointer;color:var(--energy);font-family:var(--mono);font-size:13px;list-style:none}
+  .fcd summary::-webkit-details-marker{display:none}
+  .fcd summary:before{content:"▸ ";display:inline-block;transition:transform .15s}
+  .fcd details[open] summary:before{content:"▾ "}
+  .fcd .calc{font-family:var(--mono);font-size:12.5px;color:var(--mut);line-height:1.65;margin-top:8px}
+  .fcd .calc table{width:100%;border-collapse:collapse;margin:6px 0}
+  .fcd .calc td{padding:3px 4px;border-bottom:1px solid #232c38}
+  .fcd .calc td:last-child{text-align:right;color:var(--ink);white-space:nowrap}
+  .fcd .calc tr.tot td{border-top:1px solid var(--line);border-bottom:none;font-weight:700;color:var(--ink);padding-top:6px}
+  .fcd .calc .pos{color:#ff9426} .fcd .calc .neg{color:#37bd5b}
+  .fcd .calc .hint{color:var(--faint);font-size:11.5px;line-height:1.5;margin-top:7px}
 
   /* 15-dnevno vreme */
   .wx15{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
@@ -354,7 +366,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-20 07:41</span>
+      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-20 08:56</span>
     </div>
 
   </div>
@@ -1226,6 +1238,35 @@ function fcMiniSVG(rows,lo,hi,nowHr){
   const zeroY=pt+ih-(0-lo)/rng*ih;
   return `<svg viewBox="0 0 ${W} ${H}"><line x1="${pl}" y1="${zeroY.toFixed(1)}" x2="${pl+iw}" y2="${zeroY.toFixed(1)}" stroke="#3a4452" stroke-width="0.5"/>${bars}${axis}</svg>`;
 }
+// razčleni izračun modela za en dan: pokaže vsak člen posebej, da je vidno, od kod pride cena
+function explainDay(rows, beta, full, dispAvg, free){
+  if(!beta) return "";
+  const mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
+  const wind=mean(rows.map(r=>r.wind)), solar=mean(rows.map(r=>r.solar)), demand=mean(rows.map(r=>r.demand));
+  const fr=free?1:0;
+  const tBase=beta[0], tWind=beta[1]*wind, tSolar=beta[2]*solar, tDem=beta[3]*demand, tFree=beta[4]*fr;
+  const total=tBase+tWind+tSolar+tDem+tFree;
+  const c=v=>(v/10).toFixed(2);           // €/MWh -> c€/kWh
+  const sgn=v=>v>=0?"+":"\u2212";          // pravi minus
+  const cls=v=>v>=0?"pos":"neg";
+  const row=(label,detail,val)=>
+    `<tr><td>${label}<br><span style="color:var(--faint);font-size:11px">${detail}</span></td>`+
+    `<td class="${cls(val)}">${sgn(val)}${c(Math.abs(val))}</td></tr>`;
+  const hint = full
+    ? `Ta dan ima <b>objavljene borzne cene</b>, zato je prikazana dejanska cena, ne ta izračun. Spodnje je le v vpogled, kaj bi model napovedal.`
+    : `Model sešteje osnovo in vpliv vsakega dejavnika. Koeficienti so naučeni iz zadnjih dni, ko so cene znane; tu so pomnoženi z dnevnim povprečjem vsakega dejavnika.`;
+  return `<details><summary>kako je model prišel do te cene</summary>`+
+    `<div class="calc"><table>`+
+    `<tr><td>osnova (izhodišče)<br><span style="color:var(--faint);font-size:11px">presečišče regresije</span></td><td>${c(tBase)}</td></tr>`+
+    row("veter", `${wind.toFixed(1)} m/s &times; ${beta[1].toFixed(1)}`, tWind)+
+    row("sonce", `${Math.round(solar)} W/m² &times; ${beta[2].toFixed(3)}`, tSolar)+
+    row("poraba", `profil ${demand.toFixed(2)} &times; ${beta[3].toFixed(0)}`, tDem)+
+    (fr? row("dela prost dan", `vikend/praznik &times; ${beta[4].toFixed(1)}`, tFree)
+       : `<tr><td>dela prost dan<br><span style="color:var(--faint);font-size:11px">delovni dan, se ne upošteva</span></td><td style="color:var(--faint)">0.00</td></tr>`)+
+    `<tr class="tot"><td>napoved modela</td><td>${total<0?"\u2212":""}${c(Math.abs(total))} c€/kWh</td></tr>`+
+    `</table>`+
+    `<div class="hint">${hint}</div></div></details>`;
+}
 function renderForecast(feat,beta,fit,nTrain,trainDays){
   const fc=document.getElementById("fc"); fc.innerHTML="";
   const d=nowLjubljana();
@@ -1247,8 +1288,9 @@ function renderForecast(feat,beta,fit,nTrain,trainDays){
     const full = acts.length >= Math.max(20, rows.length*0.8); // cel dan ima borzne cene
     const dispVal=r=> r.actual!=null? r.actual : r.pred;
     const dispAvg = full ? mean(acts) : (preds.length?mean(preds):(acts.length?mean(acts):null));
-    const cheap=rows.filter(r=>dispVal(r)!=null).slice().sort((a,b)=>dispVal(a)-dispVal(b))
-      .slice(0,3).map(r=>String(r.hr).padStart(2,"0")).sort();
+    const cheapRows=rows.filter(r=>dispVal(r)!=null).slice().sort((a,b)=>dispVal(a)-dispVal(b)).slice(0,3);
+    const cheap=cheapRows.map(r=>String(r.hr).padStart(2,"0")).sort();
+    const cheapAvg=cheapRows.length?mean(cheapRows.map(dispVal)):null;
     const lab=isToday?"danes":(dd.getTime()===todayStart.getTime()+864e5?"jutri":DOW[dd.getDay()].slice(0,3));
     const windAvg=mean(rows.map(r=>r.wind));
     const windMax=Math.max(...rows.map(r=>r.wind));
@@ -1264,13 +1306,16 @@ function renderForecast(feat,beta,fit,nTrain,trainDays){
       fcMiniSVG(rows,lo,hi,nowHr)+
       `<div class="ft">`+
       (dispAvg!=null?`${full?"borzna cena":"napoved"} povpr. <b>${c(dispAvg)}</b> c€/kWh<br>`:``)+
-      `najceneje <b class="gd">${cheap.join(", ")}</b></div>`+
+      `najceneje <b class="gd">${cheap.join(", ")}</b>`+
+      (cheapAvg!=null?` &middot; povpr. <b class="gd">${c(cheapAvg)}</b> c€/kWh`:``)+
+      `</div>`+
       `<div class="drv">`+
         `<span>veter <b>${windAvg.toFixed(1)}</b> m/s <span style="color:var(--faint)">(do ${windMax.toFixed(0)})</span></span>`+
         `<span>sonce <b>${solarSum.toFixed(1)}</b> kWh/m²</span>`+
         `<span>temp <b>${Math.round(tempAvg)}°</b></span>`+
         `<span>poraba <b>${free?"prost dan":"delovni"}</b></span>`+
-      `</div>`;
+      `</div>`+
+      explainDay(rows, beta, full, dispAvg, free);
     fc.appendChild(el);
   });
   const dfmt=s=>{ const [Y,M,D]=s.split("-"); return `${+D}.${+M}.`; };

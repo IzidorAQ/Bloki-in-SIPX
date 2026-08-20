@@ -366,7 +366,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-20 08:56</span>
+      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-20 13:06</span>
     </div>
 
   </div>
@@ -775,10 +775,25 @@ function clearSIPXCacheAndReload(){
   try{ localStorage.removeItem(SIPX_CACHE_KEY); }catch(e){}
   location.reload();
 }
+// ali naloženi odgovori pokrivajo jutrišnji dan (do 23h) - da vemo, kdaj lahko nehamo klicati
+function coversTomorrow(list){
+  const d=nowLjubljana();
+  const need=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1,23,0,0).getTime();
+  let max=0;
+  list.forEach(j=>{
+    const us=j&&j.unix_seconds||[];
+    if(!us.length) return;
+    const t=new Date(new Date(us[us.length-1]*1000).toLocaleString("en-US",{timeZone:"Europe/Ljubljana"})).getTime();
+    if(t>max) max=t;
+  });
+  return max>=need;
+}
+let sipx429Until=0, sipx429Streak=0;   // spoštovanje omejitve vira (HTTP 429)
 async function loadSIPX(){
   // SIPX cene za jutri objavijo med 13. in 14. uro; dokler imamo (skoraj) cel jutrišnji dan,
   // ponovno nalaganje ni potrebno - samodejno se znova preveri šele, ko se datum premakne naprej.
   if(haveTomorrow()) return;
+  if(Date.now()<sipx429Until) return;   // vir nas je omejil, počakamo
   const box=document.getElementById("sipxChart");
   if(!SIPXALL.length) startWave();
   const d=nowLjubljana();
@@ -794,19 +809,43 @@ async function loadSIPX(){
   const prox=u=>[`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
                  `https://corsproxy.io/?url=${encodeURIComponent(u)}`];
   const tried=[];
-  // pridobi en vir (z rezervnima posrednikoma)
+  let hit429=false;
+  // pridobi en vir (z rezervnima posrednikoma); ob 429 takoj odneha, da ne poslabšamo omejitve
   async function grab(u){
     for(const cand of [u,...prox(u)]){
       const r=await tryFetchJSON(cand);
       if(r.data && (r.data.unix_seconds||[]).length && pricesOf(r.data).length) return r.data;
       const why=r.err||(r.data?((r.data.unix_seconds||[]).length?"odgovor brez cen":"prazen unix_seconds"):"prazen odgovor");
+      if(/429/.test(why)){ hit429=true; tried.push(`<li>${cand.split("?")[0].replace("https://","")} &rarr; ${why}</li>`); return null; }
       tried.push(`<li>${cand.split("?")[0].replace("https://","")} &rarr; ${why}</li>`);
     }
     return null;
   }
-  // OBA vira vzporedno in ju združi: "ranged" da zgodovino, "latest" pa današnji in jutrišnji dan
-  const [A,B,C]=await Promise.all([grab(ranged),grab(latest),grab(tomorrow)]);
-  if(!A && !B && !C){
+  // ZAPOREDNO z zgodnjim izhodom: "ranged" že pokriva zgodovino, danes IN jutri, zato v običajnem
+  // primeru zadošča EN klic. Ostala dva vira se uporabita le, če jutrišnjega dne še ni.
+  // (prej so se vsi trije klicali vzporedno ob vsakem osveževanju, kar je vir po nepotrebnem obremenjevalo)
+  const got=[];
+  const A=await grab(ranged); if(A) got.push(A);
+  if(!hit429 && !coversTomorrow(got)){ const B=await grab(latest); if(B) got.push(B); }
+  if(!hit429 && !coversTomorrow(got)){ const C=await grab(tomorrow); if(C) got.push(C); }
+
+  if(hit429){
+    sipx429Streak++;
+    const wait=Math.min(60, 5*Math.pow(2,sipx429Streak-1));   // 5, 10, 20, 40, največ 60 min
+    sipx429Until=Date.now()+wait*60000;
+    stopWave(false);
+    if(SIPXALL.length){
+      showSIPXWarning(`Vir je začasno omejil dostop (preveč zahtevkov). Naslednji poskus čez ${wait} min. Prikazani so zadnji znani podatki.`);
+    } else {
+      box.innerHTML=`<div class="err">Vir je začasno omejil dostop (HTTP 429 &ndash; preveč zahtevkov). `+
+        `Samodejni poskus čez ${wait} min. Lahko pa podatke <b>ročno prilepiš</b> spodaj.</div>`;
+    }
+    if(got.length) ingestSIPX(mergeSIPX(...got));   // če je kateri vir vseeno uspel, ga vseeno prikaži
+    return;
+  }
+  sipx429Streak=0;
+
+  if(!got.length){
     stopWave(false);
     const blocked=/Failed to fetch|NetworkError|load failed/i.test(tried.join(" "));
     if(SIPXALL.length){
@@ -822,7 +861,7 @@ async function loadSIPX(){
     document.getElementById("sipxList").innerHTML="";
     return;
   }
-  ingestSIPX(mergeSIPX(A,B,C));
+  ingestSIPX(mergeSIPX(...got));
 }
 // združi dva odgovora po časovni oznaki (novejši vir ima prednost pri podvojenih)
 function mergeSIPX(...src){
@@ -1938,8 +1977,13 @@ function scheduleNextSIPXCheck(){
     const d=nowLjubljana();
     const wake=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1,13,5,0); // jutri malo po 13h
     delay=Math.max(1000*60*5, wake.getTime()-d.getTime());
+  } else if(Date.now()<sipx429Until){
+    delay=Math.max(60000, sipx429Until-Date.now()+5000);   // počakaj, dokler traja omejitev vira
   } else {
-    delay=1000*60*3;
+    // pogosto sprašujemo SAMO v oknu, ko se objava dejansko pričakuje (12:45-16h).
+    // izven tega okna ni smisla klicati vsake 3 minute - to je vir po nepotrebnem obremenjevalo
+    const d=nowLjubljana(), h=d.getHours()+d.getMinutes()/60;
+    delay = (h>=12.75 && h<16) ? 1000*60*4 : 1000*60*20;
   }
   setTimeout(async ()=>{ await loadSIPX(); scheduleNextSIPXCheck(); }, delay);
 }

@@ -377,7 +377,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-21 09:03</span>
+      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-21 13:58</span>
     </div>
 
   </div>
@@ -1288,13 +1288,24 @@ function computeForecast(){
     for(const k in tmp) act[k]=tmp[k].reduce((a,b)=>a+b,0)/tmp[k].length;
   }
   const keyOf=f=>{ const [Y,M,D]=f.date.split("-").map(Number); return `${Y}-${M}-${D}-${f.hr}`; };
+  // Značilke modela. Poleg vetra, sonca in profila porabe še:
+  //  - KVADRAT sonca: cena ob močnem soncu ne pada linearno, ampak se sesede proti nič
+  //    (ko poceni sončna proizvodnja izpodrine drage elektrarne, cena zadene ob dno)
+  //  - dva HARMONIKA ure: dnevni vzorec cen (jutranja in večerna konica) je močnejši,
+  //    kot ga zmore izraziti sam profil porabe. Brez tega model pri isti sončni obsevanosti
+  //    napove enako ceno dopoldne in zvečer, čeprav sta v resnici zelo različni.
+  const featRow=f=>{
+    const a1=2*Math.PI*f.hr/24, a2=4*Math.PI*f.hr/24;
+    return [1, f.wind, f.solar, f.solar*f.solar/1000, f.demand, f.free?1:0,
+            Math.sin(a1), Math.cos(a1), Math.sin(a2), Math.cos(a2)];
+  };
   const X=[],Y=[],trainDays=new Set();
-  feat.forEach(f=>{ const p=act[keyOf(f)]; if(p!=null){ X.push([1,f.wind,f.solar,f.demand,f.free?1:0]); Y.push(p); trainDays.add(f.date); } });
+  feat.forEach(f=>{ const p=act[keyOf(f)]; if(p!=null){ X.push(featRow(f)); Y.push(p); trainDays.add(f.date); } });
   let beta=null,fit=null;
-  if(X.length>=8){ beta=olsSigned(X,Y,[1,2]); if(beta) fit=r2(X,Y,beta); }   // 1=veter, 2=sonce: le negativna vpliva
+  if(X.length>=12){ beta=olsSigned(X,Y,[1,2]); if(beta) fit=r2(X,Y,beta); }   // 1=veter, 2=sonce: le negativna vpliva
   feat.forEach(f=>{ const a=act[keyOf(f)];
     f.actual=a!=null?a:null;
-    f.pred=beta?(beta[0]+beta[1]*f.wind+beta[2]*f.solar+beta[3]*f.demand+beta[4]*(f.free?1:0)):null;
+    f.pred=beta?featRow(f).reduce((s,v,i)=>s+v*beta[i],0):null;
   });
   renderForecast(feat,beta,fit,X.length,[...trainDays].sort());
 }
@@ -1321,8 +1332,12 @@ function explainDay(rows, beta, full, dispAvg, free, fit, nTrain, trainDays){
   const wind=mean(rows.map(r=>r.wind)), solar=mean(rows.map(r=>r.solar)), demand=mean(rows.map(r=>r.demand));
   const temp=mean(rows.map(r=>r.tmean));
   const fr=free?1:0;
-  const tBase=beta[0], tWind=beta[1]*wind, tSolar=beta[2]*solar, tDem=beta[3]*demand, tFree=beta[4]*fr;
-  const total=tBase+tWind+tSolar+tDem+tFree;
+  const solar2=mean(rows.map(r=>r.solar*r.solar/1000));
+  const harm=mean(rows.map(r=>{const a1=2*Math.PI*r.hr/24,a2=4*Math.PI*r.hr/24;
+    return beta[6]*Math.sin(a1)+beta[7]*Math.cos(a1)+beta[8]*Math.sin(a2)+beta[9]*Math.cos(a2);}));
+  const tBase=beta[0], tWind=beta[1]*wind, tSolar=beta[2]*solar, tSolar2=beta[3]*solar2,
+        tDem=beta[4]*demand, tFree=beta[5]*fr, tHarm=harm;
+  const total=tBase+tWind+tSolar+tSolar2+tDem+tFree+tHarm;
   const c=v=>(v/10).toFixed(2);           // €/MWh -> c€/kWh
   const sgn=v=>v>=0?"+":"\u2212";          // pravi minus
   const cls=v=>v>=0?"pos":"neg";
@@ -1362,8 +1377,8 @@ function explainDay(rows, beta, full, dispAvg, free, fit, nTrain, trainDays){
     `Naučeni koeficienti:<br>`+
     `veter: <b>${beta[1].toFixed(2)}</b> €/MWh na m/s ${beta[1]<0?"(več vetra = ceneje)":"<span style=\"color:var(--b2)\">(v tem obdobju vpliva ni bilo mogoče zanesljivo izmeriti, zato se ne upošteva)</span>"}<br>`+
     `sonce: <b>${beta[2].toFixed(4)}</b> €/MWh na W/m² ${beta[2]<0?"(več sonca = ceneje)":"<span style=\"color:var(--b2)\">(vpliva ni bilo mogoče zanesljivo izmeriti, zato se ne upošteva)</span>"}<br>`+
-    `poraba: <b>${beta[3].toFixed(1)}</b> €/MWh na enoto profila<br>`+
-    `prost dan: <b>${beta[4].toFixed(1)}</b> €/MWh ${beta[4]<0?"(vikendi so cenejši)":""}<br><br>`+
+    `poraba: <b>${beta[4].toFixed(1)}</b> €/MWh na enoto profila<br>`+
+    `prost dan: <b>${beta[5].toFixed(1)}</b> €/MWh ${beta[5]<0?"(vikendi so cenejši)":""}<br>`+`sonce² (nelinearni del) in dnevni vzorec ure: dodatno prilagodita krivuljo čez dan<br><br>`+
     `<span style="color:var(--faint)">Veter in sonce lahko ceno le znižujeta, zato je pozitiven predznak pri njiju `+
     `znak šuma in ne resnične zveze. V takem primeru model dejavnik izloči (koeficient 0), namesto da bi `+
     `napovedoval, da več vetra pomeni dražjo elektriko.</span></div>`;
@@ -1375,16 +1390,20 @@ function explainDay(rows, beta, full, dispAvg, free, fit, nTrain, trainDays){
     `<tr><td>osnova (izhodišče)<br><span style="color:var(--faint);font-size:11px">presečišče regresije</span></td><td>${c(tBase)}</td></tr>`+
     row("veter", `${wind.toFixed(1)} m/s &times; ${beta[1].toFixed(2)}`, tWind)+
     row("sonce", `${Math.round(solar)} W/m² &times; ${beta[2].toFixed(4)}`, tSolar)+
-    row("poraba", `profil ${demand.toFixed(3)} &times; ${beta[3].toFixed(1)}`, tDem)+
-    (fr? row("dela prost dan", `vikend/praznik &times; ${beta[4].toFixed(1)}`, tFree)
+    row("sonce, nelinearni del", `saturacija ob močnem soncu`, tSolar2)+
+    row("poraba", `profil ${demand.toFixed(3)} &times; ${beta[4].toFixed(1)}`, tDem)+
+    (fr? row("dela prost dan", `vikend/praznik &times; ${beta[5].toFixed(1)}`, tFree)
        : `<tr><td>dela prost dan<br><span style="color:var(--faint);font-size:11px">delovni dan, se ne upošteva</span></td><td style="color:var(--faint)">0.00</td></tr>`)+
+    row("vzorec ure v dnevu", `premakne ure znotraj dneva, dnevnega povprečja ne spremeni`, tHarm)+
     `<tr class="tot"><td>napoved modela</td><td>${total<0?"\u2212":""}${c(Math.abs(total))} c€/kWh</td></tr>`+
     `</table>`;
 
   // --- 5. korak: urna razčlenitev (isti izračun za vsako uro posebej) ---
   let hourRows="";
   rows.slice().sort((a,b)=>a.hr-b.hr).forEach(r=>{
-    const v=beta[0]+beta[1]*r.wind+beta[2]*r.solar+beta[3]*r.demand+beta[4]*fr;
+    const a1=2*Math.PI*r.hr/24,a2=4*Math.PI*r.hr/24;
+    const v=beta[0]+beta[1]*r.wind+beta[2]*r.solar+beta[3]*r.solar*r.solar/1000+beta[4]*r.demand+beta[5]*fr
+            +beta[6]*Math.sin(a1)+beta[7]*Math.cos(a1)+beta[8]*Math.sin(a2)+beta[9]*Math.cos(a2);
     const shown=(r.actual!=null?r.actual:r.pred);
     const diff=(r.actual!=null&&r.pred!=null)?(r.pred-r.actual):null;
     hourRows+=`<tr><td>${String(r.hr).padStart(2,"0")}:00</td>`+
@@ -1395,8 +1414,9 @@ function explainDay(rows, beta, full, dispAvg, free, fit, nTrain, trainDays){
   });
   const step5=
     `<div class="stephd">5. Ura za uro</div>`+
-    `<div class="stepbody">Isti izračun teče za <b>vsako uro posebej</b>, z urnimi vrednostmi vetra, sonca in profila. `+
-    `Zato je krivulja čez dan valovita, čeprav so koeficienti enaki.`+
+    `<div class="stepbody">Isti izračun teče za <b>vsako uro posebej</b>, z urnimi vrednostmi vetra, sonca in profila, `+
+    `poleg tega pa še z vzorcem ure v dnevu (jutranja in večerna konica) in nelinearnim delom sonca. `+
+    `Zato je krivulja čez dan valovita in ob močnem soncu opoldne pade precej niže, kot bi jo potisnil sam linearni člen.`+
     (full?` Ker so za ta dan znane borzne cene, je dodan še stolpec z odstopanjem modela od resničnosti.`:``)+
     `</div>`+
     `<div class="hourtbl"><table>`+
@@ -1470,7 +1490,7 @@ function renderForecast(feat,beta,fit,nTrain,trainDays){
     `Za dni naprej je prikazana ocena modela: večkratna regresija cene na veter (100 m), sončno obsevanje in profil porabe `+
     `(nižji in bolj raven ob vikendih in praznikih) ter izrecno spremenljivko za dela prost dan v DE, AT, sev. Italiji, HU, HR in SI, uteženo. ${fitTxt} `+
     `Stolpci so urne cene (barva = poceni&#8594;drago), bela črta označuje trenutno uro. `+
-    `${beta?`Koef.: veter ${beta[1].toFixed(1)}, sonce ${beta[2].toFixed(2)}, poraba ${beta[3].toFixed(0)}, prosti dan ${beta[4].toFixed(1)} €/MWh. `:``}`+
+    `${beta?`Koef.: veter ${beta[1].toFixed(1)}, sonce ${beta[2].toFixed(2)}, poraba ${beta[4].toFixed(0)}, prosti dan ${beta[5].toFixed(1)} €/MWh (+ nelinearni del sonca in dnevni vzorec ure). `:``}`+
     `Groba ocena, ne tržna napoved. Vir vremena: Open-Meteo.`;
 }
 

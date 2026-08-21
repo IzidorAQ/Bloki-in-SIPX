@@ -163,6 +163,17 @@
   .fcd .calc tr.tot td{border-top:1px solid var(--line);border-bottom:none;font-weight:700;color:var(--ink);padding-top:6px}
   .fcd .calc .pos{color:#ff9426} .fcd .calc .neg{color:#37bd5b}
   .fcd .calc .hint{color:var(--faint);font-size:11.5px;line-height:1.5;margin-top:7px}
+  .fcd .calc .stephd{font-family:var(--display);font-weight:700;font-size:13px;color:var(--energy);
+    margin:12px 0 5px;padding-top:9px;border-top:1px solid #232c38}
+  .fcd .calc .stephd:first-child{margin-top:2px;padding-top:0;border-top:none}
+  .fcd .calc .stepbody{color:var(--mut);font-size:12px;line-height:1.6}
+  .fcd .calc .stepbody b{color:var(--ink)}
+  .fcd .calc .hourtbl{max-height:230px;overflow-y:auto;margin-top:6px;border:1px solid #232c38;border-radius:7px}
+  .fcd .calc .hourtbl table{margin:0;font-size:11.5px}
+  .fcd .calc .hourtbl th{position:sticky;top:0;background:var(--panel2);color:var(--faint);
+    font-weight:500;text-align:right;padding:4px;border-bottom:1px solid var(--line)}
+  .fcd .calc .hourtbl th:first-child,.fcd .calc .hourtbl td:first-child{text-align:left}
+  .fcd .calc .hourtbl td{text-align:right;padding:3px 4px;color:var(--mut)}
 
   /* 15-dnevno vreme */
   .wx15{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
@@ -366,7 +377,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-20 13:06</span>
+      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-21 00:36</span>
     </div>
 
   </div>
@@ -1092,9 +1103,9 @@ function drawChart(chartId,data,nowT,opts){
   const ps=data.map(x=>x.p), mn=Math.min(...ps), mx=Math.max(...ps);
   const lo=Math.min(0,mn), hi=Math.max(mx,1), rng=(hi-lo)||1;
   const narrow = (window.innerWidth||1000)<=560;         // na telefonu naj bo graf višji
-  const W=1000,H=narrow?380:240,pl=8,prr=42,pt=16,pb=opts.hours?42:24, iw=W-pl-prr, ih=H-pt-pb;
+  const W=1000,H=narrow?380:240,pl=8,prr=42,pt=16,pb=opts.hours?54:34, iw=W-pl-prr, ih=H-pt-pb;
   const bw=iw/N;
-  const dayY=opts.hours?H-4:H-7;
+  const dayY=opts.hours?H-10:H-11;
   let bars="",axis="",grid="";
   const ymin=Math.floor(lo/50)*50, ymax=Math.ceil(hi/50)*50;
   for(let v=ymin; v<=ymax; v+=50){ const y=pt+ih-(v-lo)/rng*ih;
@@ -1108,7 +1119,16 @@ function drawChart(chartId,data,nowT,opts){
     if(t.getMinutes()===0 && t.getHours()===0){
       axis+=`<line x1="${x.toFixed(2)}" y1="${pt}" x2="${x.toFixed(2)}" y2="${pt+ih}" stroke="#33404f" stroke-width="1"/>`;
       const lx=Math.min(pl+iw-2, x+bw*48);
-      axis+=`<text x="${lx.toFixed(2)}" y="${dayY}" fill="#aeb9c7" font-size="16" font-weight="500" text-anchor="middle" font-family="JetBrains Mono">${f2(t)} ${t.getDate()}.${t.getMonth()+1}.</text>`;
+      const sameCal=(a,b)=>a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();
+      const tmr=new Date(nowT); tmr.setDate(nowT.getDate()+1);
+      let big=null;
+      if(sameCal(t,nowT)) big="DANES"; else if(sameCal(t,tmr)) big="JUTRI";
+      if(big){
+        axis+=`<text x="${lx.toFixed(2)}" y="${dayY}" fill="${big==="DANES"?"#34e3d2":"#f4f8fd"}" font-size="26" font-weight="700" `+
+          `letter-spacing="1" text-anchor="middle" font-family="Space Grotesk,JetBrains Mono">${big}</text>`;
+      } else {
+        axis+=`<text x="${lx.toFixed(2)}" y="${dayY}" fill="#aeb9c7" font-size="16" font-weight="500" text-anchor="middle" font-family="JetBrains Mono">${f2(t)} ${t.getDate()}.${t.getMonth()+1}.</text>`;
+      }
     }
     if(opts.hours && t.getMinutes()===0 && t.getHours()%3===0){
       axis+=`<line x1="${x.toFixed(2)}" y1="${pt+ih}" x2="${x.toFixed(2)}" y2="${(pt+ih+4).toFixed(2)}" stroke="#5a6573" stroke-width="1"/>`;
@@ -1278,10 +1298,11 @@ function fcMiniSVG(rows,lo,hi,nowHr){
   return `<svg viewBox="0 0 ${W} ${H}"><line x1="${pl}" y1="${zeroY.toFixed(1)}" x2="${pl+iw}" y2="${zeroY.toFixed(1)}" stroke="#3a4452" stroke-width="0.5"/>${bars}${axis}</svg>`;
 }
 // razčleni izračun modela za en dan: pokaže vsak člen posebej, da je vidno, od kod pride cena
-function explainDay(rows, beta, full, dispAvg, free){
+function explainDay(rows, beta, full, dispAvg, free, fit, nTrain, trainDays){
   if(!beta) return "";
   const mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
   const wind=mean(rows.map(r=>r.wind)), solar=mean(rows.map(r=>r.solar)), demand=mean(rows.map(r=>r.demand));
+  const temp=mean(rows.map(r=>r.tmean));
   const fr=free?1:0;
   const tBase=beta[0], tWind=beta[1]*wind, tSolar=beta[2]*solar, tDem=beta[3]*demand, tFree=beta[4]*fr;
   const total=tBase+tWind+tSolar+tDem+tFree;
@@ -1291,19 +1312,83 @@ function explainDay(rows, beta, full, dispAvg, free){
   const row=(label,detail,val)=>
     `<tr><td>${label}<br><span style="color:var(--faint);font-size:11px">${detail}</span></td>`+
     `<td class="${cls(val)}">${sgn(val)}${c(Math.abs(val))}</td></tr>`;
-  const hint = full
-    ? `Ta dan ima <b>objavljene borzne cene</b>, zato je prikazana dejanska cena, ne ta izračun. Spodnje je le v vpogled, kaj bi model napovedal.`
-    : `Model sešteje osnovo in vpliv vsakega dejavnika. Koeficienti so naučeni iz zadnjih dni, ko so cene znane; tu so pomnoženi z dnevnim povprečjem vsakega dejavnika.`;
-  return `<details><summary>kako je model prišel do te cene</summary>`+
-    `<div class="calc"><table>`+
+  const dfmt=s=>{ const [Y,M,D]=String(s).split("-"); return `${+D}.${+M}.`; };
+  const span=(trainDays&&trainDays.length)?`${dfmt(trainDays[0])}\u2013${dfmt(trainDays[trainDays.length-1])}`:"?";
+
+  // --- 1. korak: od kod pridejo vhodni podatki ---
+  const zoneList=ZONES.map(z=>`${z.n} ${Math.round(z.w*100)}%`).join(", ");
+  const step1=
+    `<div class="stephd">1. Vhodni podatki za ta dan</div>`+
+    `<div class="stepbody">Vremenska napoved (Open-Meteo) se vzame za <b>6 con</b> in uteži po vplivu na ceno v regiji:<br>`+
+    `<span style="color:var(--faint)">${zoneList}</span><br><br>`+
+    `Uteženo povprečje za ta dan:<br>`+
+    `veter na 100 m: <b>${wind.toFixed(1)} m/s</b><br>`+
+    `sončno obsevanje: <b>${Math.round(solar)} W/m²</b><br>`+
+    `temperatura: <b>${temp.toFixed(1)} °C</b><br>`+
+    `tip dneva: <b>${free?"dela prost":"delovni"}</b></div>`;
+
+  // --- 2. korak: kako nastane profil porabe ---
+  const step2=
+    `<div class="stephd">2. Profil porabe</div>`+
+    `<div class="stepbody">Poraba ni izmerjena, ampak <b>ocenjena iz oblike dneva</b>. Uporabi se tipičen `+
+    `${free?"vikend":"delovni"} profil (24 vrednosti, ena na uro), ki se nato pomnoži s temperaturnim `+
+    `popravkom: bolj ko je hladno pod 15,5 °C ali topleje nad 24 °C, večja je poraba (gretje oz. hlajenje).<br><br>`+
+    `Dnevno povprečje profila za ta dan: <b>${demand.toFixed(3)}</b></div>`;
+
+  // --- 3. korak: od kod koeficienti ---
+  const step3=
+    `<div class="stephd">3. Od kod koeficienti</div>`+
+    `<div class="stepbody">Model se <b>nauči</b> iz dni, ko so borzne cene že znane (${span}, `+
+    `${nTrain||"?"} ur). Z metodo najmanjših kvadratov poišče take koeficiente, ki najbolje pojasnijo `+
+    `dejanske pretekle cene. Ujemanje na učnih dneh: <b>R² ${fit!=null?fit.toFixed(2):"?"}</b>`+
+    `${fit!=null&&fit<0.5?` <span style="color:var(--b2)">(šibko, napoved je zelo groba)</span>`:``}.<br><br>`+
+    `Naučeni koeficienti:<br>`+
+    `veter: <b>${beta[1].toFixed(2)}</b> €/MWh na m/s ${beta[1]<0?"(več vetra = ceneje)":"(nenavadno: več vetra = dražje)"}<br>`+
+    `sonce: <b>${beta[2].toFixed(4)}</b> €/MWh na W/m² ${beta[2]<0?"(več sonca = ceneje)":"(nenavadno)"}<br>`+
+    `poraba: <b>${beta[3].toFixed(1)}</b> €/MWh na enoto profila<br>`+
+    `prost dan: <b>${beta[4].toFixed(1)}</b> €/MWh ${beta[4]<0?"(vikendi so cenejši)":""}</div>`;
+
+  // --- 4. korak: seštevek ---
+  const step4=
+    `<div class="stephd">4. Izračun dnevnega povprečja</div>`+
+    `<table>`+
     `<tr><td>osnova (izhodišče)<br><span style="color:var(--faint);font-size:11px">presečišče regresije</span></td><td>${c(tBase)}</td></tr>`+
-    row("veter", `${wind.toFixed(1)} m/s &times; ${beta[1].toFixed(1)}`, tWind)+
-    row("sonce", `${Math.round(solar)} W/m² &times; ${beta[2].toFixed(3)}`, tSolar)+
-    row("poraba", `profil ${demand.toFixed(2)} &times; ${beta[3].toFixed(0)}`, tDem)+
+    row("veter", `${wind.toFixed(1)} m/s &times; ${beta[1].toFixed(2)}`, tWind)+
+    row("sonce", `${Math.round(solar)} W/m² &times; ${beta[2].toFixed(4)}`, tSolar)+
+    row("poraba", `profil ${demand.toFixed(3)} &times; ${beta[3].toFixed(1)}`, tDem)+
     (fr? row("dela prost dan", `vikend/praznik &times; ${beta[4].toFixed(1)}`, tFree)
        : `<tr><td>dela prost dan<br><span style="color:var(--faint);font-size:11px">delovni dan, se ne upošteva</span></td><td style="color:var(--faint)">0.00</td></tr>`)+
     `<tr class="tot"><td>napoved modela</td><td>${total<0?"\u2212":""}${c(Math.abs(total))} c€/kWh</td></tr>`+
-    `</table>`+
+    `</table>`;
+
+  // --- 5. korak: urna razčlenitev (isti izračun za vsako uro posebej) ---
+  let hourRows="";
+  rows.slice().sort((a,b)=>a.hr-b.hr).forEach(r=>{
+    const v=beta[0]+beta[1]*r.wind+beta[2]*r.solar+beta[3]*r.demand+beta[4]*fr;
+    const shown=(r.actual!=null?r.actual:r.pred);
+    const diff=(r.actual!=null&&r.pred!=null)?(r.pred-r.actual):null;
+    hourRows+=`<tr><td>${String(r.hr).padStart(2,"0")}:00</td>`+
+      `<td>${r.wind.toFixed(1)}</td><td>${Math.round(r.solar)}</td><td>${r.demand.toFixed(2)}</td>`+
+      `<td>${c(v)}</td>`+
+      (full?`<td>${shown!=null?c(shown):"-"}</td><td class="${diff!=null?(Math.abs(diff)>20?"pos":"neg"):""}">${diff!=null?(diff>=0?"+":"\u2212")+c(Math.abs(diff)):"-"}</td>`:``)+
+      `</tr>`;
+  });
+  const step5=
+    `<div class="stephd">5. Ura za uro</div>`+
+    `<div class="stepbody">Isti izračun teče za <b>vsako uro posebej</b>, z urnimi vrednostmi vetra, sonca in profila. `+
+    `Zato je krivulja čez dan valovita, čeprav so koeficienti enaki.`+
+    (full?` Ker so za ta dan znane borzne cene, je dodan še stolpec z odstopanjem modela od resničnosti.`:``)+
+    `</div>`+
+    `<div class="hourtbl"><table>`+
+    `<tr><th>ura</th><th>veter</th><th>sonce</th><th>profil</th><th>model</th>`+(full?`<th>dejansko</th><th>razlika</th>`:``)+`</tr>`+
+    hourRows+`</table></div>`;
+
+  const hint = full
+    ? `Ta dan ima <b>objavljene borzne cene</b>, zato je v kartici prikazana dejanska cena, ne ta izračun. Spodnje je v vpogled, kako dobro model zadene resničnost.`
+    : `Model pozna samo vreme in obliko dneva. Ne pozna cen plina, izpadov elektrarn, uvoza in izvoza ali napovedi drugih trgovcev, zato je to <b>groba ocena tendence</b>, ne napoved trga.`;
+
+  return `<details><summary>kako je model prišel do te cene</summary>`+
+    `<div class="calc">${step1}${step2}${step3}${step4}${step5}`+
     `<div class="hint">${hint}</div></div></details>`;
 }
 function renderForecast(feat,beta,fit,nTrain,trainDays){
@@ -1354,7 +1439,7 @@ function renderForecast(feat,beta,fit,nTrain,trainDays){
         `<span>temp <b>${Math.round(tempAvg)}°</b></span>`+
         `<span>poraba <b>${free?"prost dan":"delovni"}</b></span>`+
       `</div>`+
-      explainDay(rows, beta, full, dispAvg, free);
+      explainDay(rows, beta, full, dispAvg, free, fit, nTrain, trainDays);
     fc.appendChild(el);
   });
   const dfmt=s=>{ const [Y,M,D]=s.split("-"); return `${+D}.${+M}.`; };

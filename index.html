@@ -377,7 +377,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-21 00:36</span>
+      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-21 09:03</span>
     </div>
 
   </div>
@@ -1227,6 +1227,23 @@ function r2(X,y,beta){
   for(let i=0;i<X.length;i++){ const pr=X[i].reduce((a,v,j)=>a+v*beta[j],0); ss+=(y[i]-pr)**2; st+=(y[i]-yb)**2; }
   return st? 1-ss/st : 0;
 }
+// Regresija z znanimi fizikalnimi predznaki: veter in sonce lahko ceno samo ZNIŽUJETA.
+// Pri kratkem učnem obdobju (nekaj dni) je koeficient nestabilen in lahko pade v nesmiseln
+// pozitiven predznak ("več vetra = dražje"). V tem primeru ta dejavnik izločimo (koef. 0)
+// in model preračunamo brez njega, namesto da bi prikazovali fizikalno napačno zvezo.
+function olsSigned(X,y,nonPositive){
+  let drop=new Set(), beta=null;
+  for(let iter=0; iter<nonPositive.length+1; iter++){
+    const Xs=X.map(r=>r.map((v,j)=>drop.has(j)?0:v));
+    beta=ols(Xs,y);
+    if(!beta) return null;
+    drop.forEach(j=>beta[j]=0);
+    const bad=nonPositive.filter(j=>!drop.has(j) && beta[j]>0);
+    if(!bad.length) break;
+    bad.forEach(j=>drop.add(j));
+  }
+  return beta;
+}
 let WEATHER=null;
 async function loadForecast(force){
   const fc=document.getElementById("fc");
@@ -1274,7 +1291,7 @@ function computeForecast(){
   const X=[],Y=[],trainDays=new Set();
   feat.forEach(f=>{ const p=act[keyOf(f)]; if(p!=null){ X.push([1,f.wind,f.solar,f.demand,f.free?1:0]); Y.push(p); trainDays.add(f.date); } });
   let beta=null,fit=null;
-  if(X.length>=8){ beta=ols(X,Y); if(beta) fit=r2(X,Y,beta); }
+  if(X.length>=8){ beta=olsSigned(X,Y,[1,2]); if(beta) fit=r2(X,Y,beta); }   // 1=veter, 2=sonce: le negativna vpliva
   feat.forEach(f=>{ const a=act[keyOf(f)];
     f.actual=a!=null?a:null;
     f.pred=beta?(beta[0]+beta[1]*f.wind+beta[2]*f.solar+beta[3]*f.demand+beta[4]*(f.free?1:0)):null;
@@ -1343,10 +1360,13 @@ function explainDay(rows, beta, full, dispAvg, free, fit, nTrain, trainDays){
     `dejanske pretekle cene. Ujemanje na učnih dneh: <b>R² ${fit!=null?fit.toFixed(2):"?"}</b>`+
     `${fit!=null&&fit<0.5?` <span style="color:var(--b2)">(šibko, napoved je zelo groba)</span>`:``}.<br><br>`+
     `Naučeni koeficienti:<br>`+
-    `veter: <b>${beta[1].toFixed(2)}</b> €/MWh na m/s ${beta[1]<0?"(več vetra = ceneje)":"(nenavadno: več vetra = dražje)"}<br>`+
-    `sonce: <b>${beta[2].toFixed(4)}</b> €/MWh na W/m² ${beta[2]<0?"(več sonca = ceneje)":"(nenavadno)"}<br>`+
+    `veter: <b>${beta[1].toFixed(2)}</b> €/MWh na m/s ${beta[1]<0?"(več vetra = ceneje)":"<span style=\"color:var(--b2)\">(v tem obdobju vpliva ni bilo mogoče zanesljivo izmeriti, zato se ne upošteva)</span>"}<br>`+
+    `sonce: <b>${beta[2].toFixed(4)}</b> €/MWh na W/m² ${beta[2]<0?"(več sonca = ceneje)":"<span style=\"color:var(--b2)\">(vpliva ni bilo mogoče zanesljivo izmeriti, zato se ne upošteva)</span>"}<br>`+
     `poraba: <b>${beta[3].toFixed(1)}</b> €/MWh na enoto profila<br>`+
-    `prost dan: <b>${beta[4].toFixed(1)}</b> €/MWh ${beta[4]<0?"(vikendi so cenejši)":""}</div>`;
+    `prost dan: <b>${beta[4].toFixed(1)}</b> €/MWh ${beta[4]<0?"(vikendi so cenejši)":""}<br><br>`+
+    `<span style="color:var(--faint)">Veter in sonce lahko ceno le znižujeta, zato je pozitiven predznak pri njiju `+
+    `znak šuma in ne resnične zveze. V takem primeru model dejavnik izloči (koeficient 0), namesto da bi `+
+    `napovedoval, da več vetra pomeni dražjo elektriko.</span></div>`;
 
   // --- 4. korak: seštevek ---
   const step4=

@@ -313,7 +313,7 @@
       <div id="sipxList" class="sipxlist"></div>
       <details style="margin-top:12px">
         <summary style="cursor:pointer;color:var(--mut);font-size:12px;font-family:var(--mono)">Ročni vnos podatkov (če samodejni klic ne uspe)</summary>
-        <div class="note" style="margin-top:8px">Odpri <span style="color:var(--energy)">api.energy-charts.info/price?bzn=SI</span>, kopiraj celoten JSON in ga prilepi sem:</div>
+        <div class="note" style="margin-top:8px">Glavni vir: energy-charts (15-min). Rezervni: elecz.com (urno, ENTSO-E), uporabi se le ob izpadu glavnega. Odpri <span style="color:var(--energy)">api.energy-charts.info/price?bzn=SI</span>, kopiraj celoten JSON in ga prilepi sem:</div>
         <textarea id="sipxPaste" placeholder='{"unix_seconds":[...],"price":[...]}' style="width:100%;min-height:70px;margin-top:8px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px;font-family:var(--mono);font-size:11px"></textarea>
         <button class="tab" style="margin-top:8px" onclick="ingestPaste()">Prikaži prilepljene cene</button>
       </details>
@@ -377,7 +377,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-29 10:09</span>
+      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-29 22:35</span>
     </div>
 
   </div>
@@ -800,6 +800,39 @@ function coversTomorrow(list){
   return max>=need;
 }
 let sipx429Until=0, sipx429Streak=0;   // spoštovanje omejitve vira (HTTP 429)
+let sipxAltUsed=false;                 // ali je bil uporabljen rezervni vir
+// Rezervni vir: elecz.com (ENTSO-E, brez žetona). Vrne URNE cene v c€/kWh, zato jih pretvorimo
+// v €/MWh (x10) in razpišemo na 15-minutne rezine, da se ujemajo z obliko glavnega vira.
+// PREVIDNOST: endpoint vrača "najcenejše ure", zato sprejmemo le odgovor, ki pokriva dovolj
+// zaporednih ur; sicer bi v grafu nastale luknje in napačna slika.
+async function grabElecz(){
+  const urls=["https://elecz.com/signal/cheapest-hours?zone=SI&hours=48&window=48",
+              `https://api.allorigins.win/raw?url=${encodeURIComponent("https://elecz.com/signal/cheapest-hours?zone=SI&hours=48&window=48")}`];
+  for(const u of urls){
+    const r=await tryFetchJSON(u);
+    const j=r.data;
+    if(!j || !Array.isArray(j.cheapest_hours) || !j.cheapest_hours.length) continue;
+    const rows=j.cheapest_hours
+      .map(x=>({t:new Date(x.hour.length<=16?x.hour+":00":x.hour), c:parseFloat(x.price)}))
+      .filter(x=>!isNaN(x.t.getTime()) && !isNaN(x.c))
+      .sort((a,b)=>a.t-b.t);
+    if(rows.length<20) continue;                       // premalo ur, ne tvegamo lukenj
+    // preveri, da so ure zaporedne (največ ena manjkajoča vmes)
+    let gaps=0;
+    for(let i=1;i<rows.length;i++){
+      const d=(rows[i].t-rows[i-1].t)/3600000;
+      if(d>1.01) gaps+=Math.round(d-1);
+    }
+    if(gaps>2) continue;                               // vrsta ni dovolj strnjena
+    const us=[],pr=[];
+    rows.forEach(x=>{                                  // urno -> 4 x 15 min, cena v €/MWh
+      for(let q=0;q<4;q++){ us.push(Math.floor(x.t.getTime()/1000)+q*900); pr.push(x.c*10); }
+    });
+    sipxAltUsed=true;
+    return {unix_seconds:us, price:pr, unit:"EUR / MWh", _alt:true};
+  }
+  return null;
+}
 async function loadSIPX(){
   // SIPX cene za jutri objavijo med 13. in 14. uro; dokler imamo (skoraj) cel jutrišnji dan,
   // ponovno nalaganje ni potrebno - samodejno se znova preveri šele, ko se datum premakne naprej.
@@ -821,6 +854,7 @@ async function loadSIPX(){
                  `https://corsproxy.io/?url=${encodeURIComponent(u)}`];
   const tried=[];
   let hit429=false;
+  sipxAltUsed=false;   // ponastavi ob vsakem nalaganju
   // pridobi en vir (z rezervnima posrednikoma); ob 429 takoj odneha, da ne poslabšamo omejitve
   async function grab(u){
     for(const cand of [u,...prox(u)]){
@@ -839,6 +873,15 @@ async function loadSIPX(){
   const A=await grab(ranged); if(A) got.push(A);
   if(!hit429 && !coversTomorrow(got)){ const B=await grab(latest); if(B) got.push(B); }
   if(!hit429 && !coversTomorrow(got)){ const C=await grab(tomorrow); if(C) got.push(C); }
+
+  // REZERVNI VIR (elecz.com, podatki iz ENTSO-E, brez žetona): uporabi se SAMO takrat, ko glavni
+  // vir nima dneva, ki ga potrebujemo. Preverjeno se zgodi, da energy-charts (prek nemškega SMARD)
+  // zaostane, elecz pa isti dan že ima. Ločljivost je urna, ne 15-minutna, kar za GEN-I obračun
+  // zadošča, zato se uporabi le kot dopolnilo, nikoli namesto glavnega vira.
+  if(!coversTomorrow(got) || !got.length){
+    const alt=await grabElecz();
+    if(alt) got.push(alt);
+  }
 
   if(hit429){
     sipx429Streak++;
@@ -935,9 +978,11 @@ function ingestSIPX(j, isSeed){
   const d=nowLjubljana();
   let cur=null; for(const pt of SIPXVIEW){ if(pt.t<=d) cur=pt; else break; }
   SIPXnow = cur?cur.p:null;
+  // opozorilo počisti PRED izrisom: izris lahko sam postavi novo (npr. da za danes cen še ni),
+  // če bi ga čistili po njem, bi to novo obvestilo takoj izbrisali
+  const warnEl=document.getElementById("sipxWarn"); if(warnEl){ warnEl.style.display="none"; warnEl.innerHTML=""; }
   renderCore();
   renderSIPX();
-  const warnEl=document.getElementById("sipxWarn"); if(warnEl){ warnEl.style.display="none"; warnEl.innerHTML=""; }
   if(!isSeed && typeof computeForecast==="function") computeForecast(); // prekalibriraj z živimi cenami, brez novega klica na vreme
   saveSIPXCache();
   checkTomorrowNotify();
@@ -1059,7 +1104,9 @@ function renderSIPX(){
     '<button class="tab" style="padding:4px 10px" onclick="clearSIPXCacheAndReload()">počisti in osveži stran</button></div>'; return; }
   const d=nowLjubljana();
   const f=x=>`${x.getDate()}.${x.getMonth()+1}.`;
-  const badge = `<span style="color:#37bd5b">&#9679; v živo</span>`;
+  const badge = sipxAltUsed
+    ? `<span style="color:var(--b2)">&#9679; rezervni vir (elecz, urno)</span>`
+    : `<span style="color:#37bd5b">&#9679; v živo</span>`;
   document.getElementById("sipxRange").innerHTML=`${f(SIPXVIEW[0].t)} \u2013 ${f(SIPXVIEW[SIPXVIEW.length-1].t)}${SIPXVIEW[0].t.getFullYear()} &middot; ${badge}`;
   // statistika za danes (po izbrani ločljivosti)
   const sd=(a,b)=>a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();

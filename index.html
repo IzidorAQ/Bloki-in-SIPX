@@ -377,7 +377,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-22 06:38</span>
+      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-29 10:09</span>
     </div>
 
   </div>
@@ -1054,7 +1054,9 @@ function stopWave(done){
 }
 function renderSIPX(){
   const chart=document.getElementById("sipxChart"), stats=document.getElementById("sipxStats");
-  if(!SIPXVIEW.length){ chart.innerHTML='<div class="ld">Ni podatkov.</div>'; return; }
+  if(!SIPXVIEW.length){ chart.innerHTML='<div class="err">Cene niso naložene. '+
+    '<button class="tab" style="padding:4px 10px;margin-left:6px" onclick="loadSIPX()">poskusi znova</button> '+
+    '<button class="tab" style="padding:4px 10px" onclick="clearSIPXCacheAndReload()">počisti in osveži stran</button></div>'; return; }
   const d=nowLjubljana();
   const f=x=>`${x.getDate()}.${x.getMonth()+1}.`;
   const badge = `<span style="color:#37bd5b">&#9679; v živo</span>`;
@@ -1083,7 +1085,22 @@ function viewData(){
   if(sipxView!=="td") return SIPXVIEW;
   const tmr=new Date(d); tmr.setDate(d.getDate()+1);
   const sd=(a,b)=>a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();
-  return SIPXVIEW.filter(x=>sd(x.t,d)||sd(x.t,tmr));
+  const sel=SIPXVIEW.filter(x=>sd(x.t,d)||sd(x.t,tmr));
+  // Če za danes in jutri ni nobene ure (cene se še niso naložile, omrežje pa je odpovedalo),
+  // ne pusti praznega grafa: samodejno preklopi na zadnje razpoložljivo obdobje in to jasno povej.
+  if(!sel.length){
+    sipxView="multi";
+    const el=document.getElementById("sipxWarn");
+    if(el && !/Za danes cene/.test(el.innerHTML)){
+      el.style.display="block";
+      el.innerHTML=`<div class="err" style="margin-bottom:12px">Za danes cene še niso naložene, `+
+        `zato je prikazano zadnje razpoložljivo obdobje. `+
+        `<button class="tab" style="padding:4px 10px;margin-left:6px" onclick="loadSIPX()">poskusi znova</button> `+
+        `<button class="tab" style="padding:4px 10px" onclick="clearSIPXCacheAndReload()">počisti in osveži stran</button></div>`;
+    }
+    return SIPXVIEW;
+  }
+  return sel;
 }
 function drawSipxView(){
   if(!SIPXVIEW.length) return;
@@ -1096,7 +1113,9 @@ function drawChart(chartId,data,nowT,opts){
   opts=opts||{};
   const chart=document.getElementById(chartId); if(!chart) return;
   const N=data.length;
-  if(!N){ chart.innerHTML='<div class="ld">Ni podatkov.</div>'; return; }
+  if(!N){ chart.innerHTML='<div class="err">Cene za to obdobje niso na voljo. '+
+    '<button class="tab" style="padding:4px 10px;margin-left:6px" onclick="loadSIPX()">poskusi znova</button> '+
+    '<button class="tab" style="padding:4px 10px" onclick="clearSIPXCacheAndReload()">počisti in osveži stran</button></div>'; return; }
   let nowIdx=-1; for(let i=0;i<N;i++){ if(data[i].t<=nowT) nowIdx=i; else break; }
   const sameDay=(a,b)=>a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();
   const showNow = nowIdx>=0 && sameDay(data[nowIdx].t,nowT);
@@ -1390,7 +1409,18 @@ function explainDay(rows, beta, full, dispAvg, free, fit, nTrain, trainDays){
     `sonce: <b>${beta[2].toFixed(4)}</b> €/MWh na W/m² ${beta[2]<0?"(več sonca = ceneje)":"<span style=\"color:var(--b2)\">(vpliva ni bilo mogoče zanesljivo izmeriti, zato se ne upošteva)</span>"}<br>`+
     `poraba: <b>${beta[4].toFixed(1)}</b> €/MWh na enoto profila<br>`+
     `prost dan: <b>${beta[5].toFixed(1)}</b> €/MWh ${beta[5]<0?"(vikendi so cenejši)":""}<br>`+`sonce² (nelinearni del) in dnevni vzorec ure: dodatno prilagodita krivuljo čez dan<br>`+
-    (fr ? `prost dan: sonce ga potisne globlje (<b>${beta[10].toFixed(3)}</b>) in ima <b>svojo obliko dneva</b><br>`:``)+`<br>`+
+    (fr ? (()=>{
+       // Posamezni koeficienti prostega dne niso razumljivi vsak zase, ker se učinek deli med
+       // konstanto, sonce in obliko dneva. Zato prikažemo NETO učinek ob dveh značilnih urah.
+       const netFree=(hr,sol)=>{const a1=2*Math.PI*hr/24,a2=4*Math.PI*hr/24;
+         return beta[5]+beta[10]*sol+beta[11]*sol*sol/1000
+              +beta[12]*Math.sin(a1)+beta[13]*Math.cos(a1)+beta[14]*Math.sin(a2)+beta[15]*Math.cos(a2);};
+       const solMid=Math.max(...rows.map(r=>r.solar));
+       const n3=netFree(3,0)/10, n13=netFree(13,solMid)/10;
+       const f2=v=>(v<0?"\u2212":"+")+Math.abs(v).toFixed(2);
+       return `<b>neto učinek prostega dne</b> (vsi členi skupaj):<br>`+
+         `ponoči (3h): <b>${f2(n3)}</b> c€/kWh &middot; opoldne (13h): <b>${f2(n13)}</b> c€/kWh<br>`;
+     })():``)+`<br>`+
     `<span style="color:var(--faint)">Veter in sonce lahko ceno le znižujeta, zato je pozitiven predznak pri njiju `+
     `znak šuma in ne resnične zveze. V takem primeru model dejavnik izloči (koeficient 0), namesto da bi `+
     `napovedoval, da več vetra pomeni dražjo elektriko.</span></div>`;
@@ -1407,7 +1437,7 @@ function explainDay(rows, beta, full, dispAvg, free, fit, nTrain, trainDays){
     (fr? row("dela prost dan", `vikend/praznik &times; ${beta[5].toFixed(1)}`, tFree)
        : `<tr><td>dela prost dan<br><span style="color:var(--faint);font-size:11px">delovni dan, se ne upošteva</span></td><td style="color:var(--faint)">0.00</td></tr>`)+
     row("vzorec ure v dnevu", `oblika dneva${fr?" (vikend ima svojo)":""}; premakne ure znotraj dneva`, tHarm)+
-    (fr? row("prost dan &times; sonce", `ob vikendu sonce ceno potisne globlje`, tFreeSun) : ``)+
+    (fr? row("prost dan &times; sonce", tFreeSun<0?`ob vikendu sonce ceno dodatno zniža`:`popravek: ta del vikendskega učinka ceno dvigne`, tFreeSun) : ``)+
     `<tr class="tot"><td>napoved modela</td><td>${total<0?"\u2212":""}${c(Math.abs(total))} c€/kWh</td></tr>`+
     `</table>`;
 

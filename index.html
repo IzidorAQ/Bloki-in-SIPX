@@ -377,7 +377,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-29 22:35</span>
+      <span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-08-31 00:09</span>
     </div>
 
   </div>
@@ -1383,9 +1383,10 @@ function computeForecast(){
   });
   renderForecast(feat,beta,fit,X.length,[...trainDays].sort());
 }
-function fcMiniSVG(rows,lo,hi,nowHr){
+function fcMiniSVG(rows,lo,hi,nowHr,full){
   const W=240,H=72,pl=2,prr=2,pt=5,pb=12,iw=W-pl-prr,ih=H-pt-pb,rng=(hi-lo)||1,bw=iw/24;
   let bars="",axis="";
+  const hasActual=!!full;   // črto rišemo le pri dnevih s (skoraj) celotno borzno ceno
   for(let h=0;h<24;h++){
     const r=rows.find(x=>x.hr===h), x=pl+bw*h;
     const v=r?(r.actual!=null?r.actual:r.pred):null; // dejanska borzna cena ima prednost pred modelom
@@ -1396,8 +1397,26 @@ function fcMiniSVG(rows,lo,hi,nowHr){
     if(h===nowHr) axis+=`<line x1="${(x+bw*0.42).toFixed(1)}" y1="${pt-2}" x2="${(x+bw*0.42).toFixed(1)}" y2="${pt+ih}" stroke="#fff" stroke-width="1"/>`;
     if(h%6===0) axis+=`<text x="${(x+bw*0.42).toFixed(1)}" y="${H-2}" fill="#aeb9c7" font-size="11" text-anchor="middle" font-family="JetBrains Mono">${h}</text>`;
   }
+  // Pri dnevih z že objavljeno borzno ceno (stolpci) narišemo še črto z napovedjo modela,
+  // da je na prvi pogled vidno, kje se model ujame in kje zgreši.
+  let predLine="";
+  if(hasActual){
+    const pts=[];
+    for(let h=0;h<24;h++){
+      const r=rows.find(x=>x.hr===h);
+      if(r && r.pred!=null){
+        const y=pt+ih-(r.pred-lo)/rng*ih;
+        pts.push(`${(pl+bw*h+bw*0.42).toFixed(1)},${y.toFixed(1)}`);
+      }
+    }
+    if(pts.length>1){
+      predLine=`<polyline points="${pts.join(" ")}" fill="none" stroke="#f4f8fd" stroke-width="1.4" `+
+        `stroke-dasharray="3 2" opacity="0.85" stroke-linejoin="round"><title>napoved modela</title></polyline>`;
+    }
+  }
   const zeroY=pt+ih-(0-lo)/rng*ih;
-  return `<svg viewBox="0 0 ${W} ${H}"><line x1="${pl}" y1="${zeroY.toFixed(1)}" x2="${pl+iw}" y2="${zeroY.toFixed(1)}" stroke="#3a4452" stroke-width="0.5"/>${bars}${axis}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}"><line x1="${pl}" y1="${zeroY.toFixed(1)}" x2="${pl+iw}" y2="${zeroY.toFixed(1)}" stroke="#3a4452" stroke-width="0.5"/>${bars}${predLine}${axis}</svg>`+
+    (hasActual?`<div style="font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:2px">stolpci = borzna cena &middot; <span style="color:var(--ink)">črtkano = napoved modela</span></div>`:``);
 }
 // razčleni izračun modela za en dan: pokaže vsak člen posebej, da je vidno, od kod pride cena
 function explainDay(rows, beta, full, dispAvg, free, fit, nTrain, trainDays){
@@ -1561,9 +1580,18 @@ function renderForecast(feat,beta,fit,nTrain,trainDays){
     const el=document.createElement("div"); el.className="fcd"+(isToday?" today":"");
     el.innerHTML=
       `<div class="hd"><span class="dow">${lab}</span><span class="dt">${String(D).padStart(2,"0")}.${String(M).padStart(2,"0")}. &middot; ${tag}</span></div>`+
-      fcMiniSVG(rows,lo,hi,nowHr)+
+      fcMiniSVG(rows,lo,hi,nowHr,full)+
       `<div class="ft">`+
       (dispAvg!=null?`${full?"borzna cena":"napoved"} povpr. <b>${c(dispAvg)}</b> c€/kWh<br>`:``)+
+      (full?(()=>{   // dan ima borzne cene: pokaži, kako blizu je bil model
+        const par=rows.filter(r=>r.actual!=null && r.pred!=null);
+        if(par.length<4) return ``;
+        const mae=par.reduce((a,r)=>a+Math.abs(r.pred-r.actual),0)/par.length;
+        const bias=par.reduce((a,r)=>a+(r.pred-r.actual),0)/par.length;
+        const znak=bias>0.5?"previsoko":bias<-0.5?"prenizko":"brez pristranskosti";
+        return `<span style="color:var(--faint)">model se je zmotil povpr. za </span>`+
+               `<b>${c(mae)}</b><span style="color:var(--faint)"> c€/kWh (${znak})</span><br>`;
+      })():``)+
       `najceneje <b class="gd">${cheap.join(", ")}</b>`+
       (cheapAvg!=null?` &middot; povpr. <b class="gd">${c(cheapAvg)}</b> c€/kWh`:``)+
       `</div>`+

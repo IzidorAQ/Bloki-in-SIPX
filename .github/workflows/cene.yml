@@ -1,0 +1,50 @@
+name: Posodobi cene
+
+# Cene za naslednji dan se objavijo okoli 13:00 po srednjeevropskem času.
+# Časi spodaj so v UTC, zato poskusimo večkrat, da pokrijemo tudi zamude in zimski čas.
+on:
+  schedule:
+    - cron: "10 11 * * *"   # ~13:10 poletni / 12:10 zimski
+    - cron: "10 12 * * *"
+    - cron: "10 13 * * *"
+    - cron: "10 15 * * *"
+    - cron: "10 18 * * *"
+    - cron: "10 5  * * *"   # jutranji poskus, če je čez noč kaj manjkalo
+  workflow_dispatch:        # gumb za ročni zagon
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cene
+  cancel-in-progress: false
+
+jobs:
+  cene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Pridobi cene
+        id: fetch
+        env:
+          EUENERGY_TOKEN: ${{ secrets.EUENERGY_TOKEN }}
+        run: node fetch-cene.js
+
+      - name: Shrani, če so nove
+        run: |
+          if [ -n "$(git status --porcelain cene.json)" ]; then
+            git config user.name "cene-bot"
+            git config user.email "actions@github.com"
+            git add cene.json
+            git commit -m "cene: $(date -u +%Y-%m-%d\ %H:%M) UTC"
+            git push
+            echo "Shranjeno."
+          else
+            echo "Ni sprememb."
+          fi
+          

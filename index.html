@@ -294,7 +294,7 @@
     <!-- ENERGY NOW -->
     <!-- SIPX -->
     <section class="panel">
-      <h2>SIPX day-ahead &middot; borzna cena energije <span id="sipxRange" style="color:var(--faint);font-family:var(--mono);font-size:11px"></span></h2>
+      <h2>SIPX day-ahead &middot; borzna cena energije <span id="sipxRange" style="color:var(--faint);font-family:var(--mono);font-size:11px"></span><span id="sipxCheck" style="color:var(--b2);font-family:var(--mono);font-size:11px"></span></h2>
       <div id="sipxWarn" style="display:none"></div>
       <div id="tmrNotifyBar" style="margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <button class="tab" id="tmrNotifyBtn" onclick="toggleTomorrowNotify()">Obvesti me, ko so cene za jutri na voljo</button>
@@ -377,7 +377,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-09-01 22:26</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-09-03 16:50</span>
     </div>
 
   </div>
@@ -516,6 +516,7 @@ const DOW=["nedelja","ponedeljek","torek","sreda","četrtek","petek","sobota"];
 let SIPXnow=null; // €/MWh trenutne ure
 
 function renderCore(){
+  renderLastCheck();
   const d=nowLjubljana(), b=blockAt(d), sez=season(d), dt=dayType(d);
   // clock
   document.getElementById("clock").innerHTML=
@@ -800,11 +801,26 @@ function coversTomorrow(list){
   return max>=need;
 }
 let sipx429Until=0, sipx429Streak=0;   // spoštovanje omejitve vira (HTTP 429)
+let sipxLastCheck=null;                // kdaj smo nazadnje preverili vir
+// Dokler jutrišnjih cen ni in je popoldne že mimo objave (po 14h), pokaži uro zadnjega
+// preverjanja, da je jasno, da aplikacija poizveduje in ne stoji.
+function renderLastCheck(){
+  const el=document.getElementById("sipxCheck"); if(!el) return;
+  const d=nowLjubljana();
+  const treba = !haveTomorrow() && d.getHours()>=14;
+  if(!treba || !sipxLastCheck){ el.textContent=""; return; }
+  const t=new Date(new Date(sipxLastCheck).toLocaleString("en-US",{timeZone:"Europe/Ljubljana"}));
+  const hh=String(t.getHours()).padStart(2,"0"), mm=String(t.getMinutes()).padStart(2,"0");
+  const minAgo=Math.floor((Date.now()-sipxLastCheck)/60000);
+  el.textContent=` \u00b7 cen za jutri še ni, zadnje preverjanje ob ${hh}:${mm}`
+    + (minAgo>=1?` (pred ${minAgo} min)`:``);
+}
 async function loadSIPX(){
   // SIPX cene za jutri objavijo med 13. in 14. uro; dokler imamo (skoraj) cel jutrišnji dan,
   // ponovno nalaganje ni potrebno - samodejno se znova preveri šele, ko se datum premakne naprej.
   if(haveTomorrow()) return;
-  if(Date.now()<sipx429Until) return;   // vir nas je omejil, počakamo
+  if(Date.now()<sipx429Until){ renderLastCheck(); return; }   // vir nas je omejil, počakamo
+  sipxLastCheck=Date.now();
   const box=document.getElementById("sipxChart");
   if(!SIPXALL.length) startWave();
   const d=nowLjubljana();

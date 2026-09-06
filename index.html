@@ -368,20 +368,20 @@
       </div>
       <div class="row" style="margin-top:8px;display:flex;align-items:center;gap:8px">
         <input id="ev_move" type="checkbox" style="width:18px;height:18px">
-        <label for="ev_move" style="font-size:14px;color:var(--mut)">Hyundai lahko med dnevom prestavim na 11 kW polnilnico (namesto na svojo 2 kW vtičnico)</label>
+        <label for="ev_move" style="font-size:14px;color:var(--mut)">Med dnevom lahko avte prestavljam: Hyundai na 11 kW polnilnico, tisti z nje pa na sproščeno 2,5 kW vtičnico</label>
       </div>
       <div class="row" style="margin-top:8px;display:flex;align-items:center;gap:8px">
         <input id="ev_ext" type="checkbox" style="width:18px;height:18px">
-        <label for="ev_ext" style="font-size:14px;color:var(--mut)">izredni primer: dovoli MG dodatno 2 kW vtičnico (20 m kabel), če na 11 kW polnilnici ne ostane dovolj časa</label>
+        <label for="ev_ext" style="font-size:14px;color:var(--mut)">dovoli še 2 kW vtičnico na 20 m kablu (uporabi jo lahko katerikoli avto)</label>
       </div>
       <button class="evbtn" onclick="calcEVSchedule()">Izračunaj razpored</button>
       <div id="evResult"></div>
       <div class="sipxlist evlist" id="evPriceList"></div>
-      <div class="note" id="evnote">Uporablja že naložene cene (danes, in jutri, ko so objavljene) ter dejansko tarifno postavko omrežnine glede na uro. Tri polnilna mesta delujejo hkrati: 11 kW polnilnica, 2,5 kW vtičnica in 2 kW vtičnica na 20 m kablu. Vsako mesto polni en avto naenkrat, med dnevom pa se lahko preda naprej (ko je BMW poln, gre 11 kW na naslednjega). Avto ostane na svojem mestu, dokler ne konča, da ni nepotrebnega prestavljanja. Privzeti izkoristek AC polnjenja je 90 % (izgube v polnilniku in bateriji). Kljukici določata, katera mesta sme kateri avto uporabiti. Kapaciteto baterij, moč polnjenja in vire lahko po potrebi prilagodiš v kodi (EV_CARS, POINTS).</div>
+      <div class="note" id="evnote">Uporablja že naložene cene (danes, in jutri, ko so objavljene) ter dejansko tarifno postavko omrežnine glede na uro. Tri polnilna mesta delujejo hkrati: 11 kW polnilnica, 2,5 kW vtičnica in 2 kW vtičnica na 20 m kablu. Vsako mesto polni en avto naenkrat, med dnevom pa se lahko preda naprej (ko je BMW poln, gre 11 kW na naslednjega). Avto ostane na svojem mestu, dokler ne konča, da ni nepotrebnega prestavljanja. Privzeti izkoristek AC polnjenja je 90 % (izgube v polnilniku in bateriji). Kljukici razširita nabor mest: prva dovoli zamenjavo med 11 kW polnilnico in 2,5 kW vtičnico (kdor je izrinjen s polnilnice, polni naprej na vtičnici), druga doda 2 kW vtičnico na 20 m kablu. Kapaciteto baterij, moč polnjenja in vire lahko po potrebi prilagodiš v kodi (EV_CARS, POINTS).</div>
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-09-06 06:46</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-09-06 07:04</span>
     </div>
 
   </div>
@@ -1872,9 +1872,13 @@ const EV_CARS=[
 ];
 // katera mesta sme kateri avto uporabiti (odvisno od kljukic)
 function allowedPoints(carId, moveIoniq, extMG){
-  if(carId==="bmw")   return ["wb"];
-  if(carId==="mg")    return extMG ? ["wb","sockE"] : ["wb"];
-  if(carId==="ioniq") return moveIoniq ? ["sockI","wb"] : ["sockI"];
+  // Kljukica "prestavljanje" pomeni ZAMENJAVO mest: če gre Hyundai na 11 kW polnilnico,
+  // se tisti, ki jo je zasedal, lahko preseli na sproščeno 2,5 kW vtičnico in polni naprej.
+  const wbSet = moveIoniq ? ["wb","sockI"] : ["wb"];
+  const ext = extMG ? ["sockE"] : [];   // 20 m kabel doseže katerikoli avto, ko je enkrat vklopljen
+  if(carId==="bmw")   return wbSet.concat(ext);
+  if(carId==="mg")    return wbSet.concat(ext);
+  if(carId==="ioniq") return (moveIoniq ? ["sockI","wb"] : ["sockI"]).concat(ext);
   return [];
 }
 const EV_EFF=0.90;          // izkoristek AC polnjenja (izgube v polnilniku in bateriji)

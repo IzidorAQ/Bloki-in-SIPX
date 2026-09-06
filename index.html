@@ -367,17 +367,21 @@
         <span style="font-size:14px;color:var(--mut)">c€/kWh</span>
       </div>
       <div class="row" style="margin-top:8px;display:flex;align-items:center;gap:8px">
+        <input id="ev_move" type="checkbox" style="width:18px;height:18px">
+        <label for="ev_move" style="font-size:14px;color:var(--mut)">Hyundai lahko med dnevom prestavim na 11 kW polnilnico (namesto na svojo 2 kW vtičnico)</label>
+      </div>
+      <div class="row" style="margin-top:8px;display:flex;align-items:center;gap:8px">
         <input id="ev_ext" type="checkbox" style="width:18px;height:18px">
         <label for="ev_ext" style="font-size:14px;color:var(--mut)">izredni primer: dovoli MG dodatno 2 kW vtičnico (20 m kabel), če na 11 kW polnilnici ne ostane dovolj časa</label>
       </div>
       <button class="evbtn" onclick="calcEVSchedule()">Izračunaj razpored</button>
       <div id="evResult"></div>
       <div class="sipxlist evlist" id="evPriceList"></div>
-      <div class="note" id="evnote">Uporablja že naložene cene (danes, in jutri, ko so objavljene) ter dejansko tarifno postavko omrežnine glede na uro. Dva vzporedna vira: 11 kW polnilnica si delita BMW in MG (eden naenkrat, algoritem izbere vrstni red), Hyundai polni neodvisno na svoji 2 kW vtičnici in ne čaka na druga dva. Privzeti izkoristek AC polnjenja je 90 % (izgube v polnilniku in bateriji). Kapaciteto baterij, moč polnjenja in vire lahko po potrebi prilagodiš v kodi (EV_CARS, POINTS).</div>
+      <div class="note" id="evnote">Uporablja že naložene cene (danes, in jutri, ko so objavljene) ter dejansko tarifno postavko omrežnine glede na uro. Dva vzporedna vira: 11 kW polnilnica si delita BMW in MG (eden naenkrat, algoritem izbere vrstni red), Hyundai polni neodvisno na svoji 2 kW vtičnici in ne čaka na druga dva. Privzeti izkoristek AC polnjenja je 90 % (izgube v polnilniku in bateriji). Če dovoliš preparkiranje Hyundaija, orodje preračuna oba primera in izbere tistega, ki napolni več energije; ob enakem izkupičku cenejšega. Kapaciteto baterij, moč polnjenja in vire lahko po potrebi prilagodiš v kodi (EV_CARS, POINTS).</div>
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-09-03 16:50</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-09-06 06:29</span>
     </div>
 
   </div>
@@ -1961,7 +1965,7 @@ function scheduleGroup(groupCars, pool, future){
     const kwh=slots.reduce((a,x)=>a+car.slotKwh*(x.frac||1),0);
     const costEUR=slots.reduce((a,x)=>a+x.price*(x.frac||1),0)/100*car.slotKwh;
     const reachedSoc=Math.min(100, car.soc+(kwh/car.batt)*100);
-    sessions.forEach(se=>{ se.kwh=se.fracSum*car.slotKwh; se.costEUR=(se.wsum/100)*car.slotKwh; se.avg=se.sum/se.n; });
+    sessions.forEach(se=>{ se.kwh=se.fracSum*car.slotKwh; se.costEUR=(se.wsum/100)*car.slotKwh; se.avg=se.sum/se.n; se.kw=car.power; });
     return {car, sessions, kwh, costEUR, reachedSoc, reduced:car.slots<car.slotsFull, partial:slots.length<car.slots};
   }).filter(r=>r.sessions.length);
 
@@ -2025,12 +2029,36 @@ function calcEVSchedule(){
 
   // dva NEODVISNA vzporedna vira: wb (BMW+MG si delita) in sock (Hyundai sam),
   // vsak dobi svojo neodvisno kopijo poceni rezin, saj gre za ločena tokokroga
-  const wbGroup=cars.filter(c=>c.point==="wb"), sockGroup=cars.filter(c=>c.point==="sock");
-  const wb=scheduleGroup(wbGroup, poolAll.slice(), future);
-  const sk=scheduleGroup(sockGroup, poolAll.slice(), future);
-  let results=[...wb.results, ...sk.results];
-  let naiveCost=wb.naiveCost+sk.naiveCost;
-  let capped=wb.unmet||sk.unmet;
+  const moveIoniq = (document.getElementById("ev_move")||{}).checked;
+  function planWith(ioniqOnWb){
+    const cs=cars.map(c=>{
+      if(c.id!=="ioniq" || !ioniqOnWb) return c;
+      // Hyundai prestavljen na 11 kW polnilnico: hitrejši (7,2 kW namesto 2 kW),
+      // a se mora vrstiti z BMW in MG, ker gre za isti priključek
+      const power=Math.min(c.maxPower, POINTS.wb);
+      const slotKwh=power*EV_EFF;
+      return {...c, point:"wb", power, slotKwh, slots:Math.ceil(c.needKwh/slotKwh)};
+    });
+    const wbG=cs.filter(c=>c.point==="wb"), skG=cs.filter(c=>c.point==="sock");
+    const a=scheduleGroup(wbG, poolAll.slice(), future);
+    const b=scheduleGroup(skG, poolAll.slice(), future);
+    const res=[...a.results, ...b.results];
+    const kwh=res.reduce((x,r)=>x+r.kwh,0);
+    const cost=res.reduce((x,r)=>x+r.costEUR,0);
+    return {results:res, naiveCost:a.naiveCost+b.naiveCost, capped:a.unmet||b.unmet, kwh, cost, ioniqOnWb};
+  }
+  const planSock=planWith(false);
+  // Boljši je tisti, ki napolni VEČ energije; ob enakem izkupičku pa cenejši.
+  // (več energije šteje bolj, ker je cilj napolniti avtomobile, ne le varčevati)
+  const planWb = moveIoniq ? planWith(true) : null;
+  const better = planWb && (planWb.kwh > planSock.kwh + 0.05
+                 || (Math.abs(planWb.kwh-planSock.kwh)<=0.05 && planWb.cost < planSock.cost - 0.01))
+                 ? planWb : planSock;
+  const movedIoniq = better.ioniqOnWb;
+  let results=better.results;
+  let naiveCost=better.naiveCost;
+  let capped=better.capped;
+  const moveGain = planWb ? {kwh:planWb.kwh-planSock.kwh, cost:planWb.cost-planSock.cost} : null;
 
   // izredni primer: MG dodatno na 20-metrski 2 kW vtičnici, če na polnilnici ni prišel do cilja
   let extResult=null;
@@ -2051,7 +2079,7 @@ function calcEVSchedule(){
         extResult=scheduleGroup([extPoolCar], extPool, future);
         if(extResult.results.length){
           const er=extResult.results[0];
-          mgWb.sessions=[...mgWb.sessions, ...er.sessions.map(se=>({...se, ext:true}))].sort((a,b)=>a.start-b.start);
+          mgWb.sessions=[...mgWb.sessions, ...er.sessions.map(se=>({...se, ext:true, kw:extPower}))].sort((a,b)=>a.start-b.start);
           mgWb.kwh+=er.kwh; mgWb.costEUR+=er.costEUR;
           mgWb.reachedSoc=Math.min(100, mgOrig.soc+(mgWb.kwh/mgOrig.batt)*100);
           mgWb.reduced = mgWb.reachedSoc < mgOrig.tgt-0.5;
@@ -2061,7 +2089,7 @@ function calcEVSchedule(){
     }
   }
 
-  displayEVResult(future, results, naiveCost, capped, cap, skippedH, extOn, startFrom);
+  displayEVResult(future, results, naiveCost, capped, cap, skippedH, extOn, startFrom, movedIoniq, moveGain);
   renderEVPriceList(future, results, startFrom);
 }
 
@@ -2101,7 +2129,7 @@ function renderEVPriceList(future, results, startFrom){
   el.innerHTML=html;
 }
 
-function displayEVResult(future, results, naiveCost, capped, cap, skippedH, extOn, startFrom){
+function displayEVResult(future, results, naiveCost, capped, cap, skippedH, extOn, startFrom, movedIoniq, moveGain){
   const out=document.getElementById("evResult");
   const order={bmw:0,ioniq:1,mg:2};
   results=results.slice().sort((a,b)=>(order[a.car.id]??9)-(order[b.car.id]??9));
@@ -2123,23 +2151,39 @@ function displayEVResult(future, results, naiveCost, capped, cap, skippedH, extO
       : '';
     const winTxt = r.sessions.length===1
       ? `${dd(dispStart(r.sessions[0].start))} ${hh(dispStart(r.sessions[0].start))}&ndash;${hh(r.sessions[0].end)}${dd(r.sessions[0].end)!==dd(dispStart(r.sessions[0].start))?" "+dd(r.sessions[0].end):""}${r.sessions[0].ext?' <span style="color:var(--faint)">(20 m kabel)</span>':''}`
-      : `${r.sessions.length} okna: `+r.sessions.map(se=>`${dd(dispStart(se.start))} ${hh(dispStart(se.start))}&ndash;${hh(se.end)}${se.ext?"*":""}`).join(", ");
+      : (()=>{
+          const mixed=new Set(r.sessions.map(se=>se.kw)).size>1;   // različne moči -> navedi pri vsakem oknu
+          return `${r.sessions.length} okna: `+r.sessions.map(se=>
+            `${dd(dispStart(se.start))} ${hh(dispStart(se.start))}&ndash;${hh(se.end)}`+
+            (mixed&&se.kw!=null?` <span style="color:var(--faint)">(${String(se.kw).replace(".",",")} kW)</span>`:``)+
+            (se.ext?"*":"")).join(", ");
+        })();
     const avgPrice = r.kwh>0 ? (r.costEUR/r.kwh*100) : 0;
     const durH = r.sessions.reduce((a,se)=>a+(se.end-dispStart(se.start))/3600000,0);
     rows+=`<tr><td><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${p.color};margin-right:6px"></span>${p.name}${tag}</td>`+
       `<td style="font-size:13px">${winTxt}</td>`+
+      `<td>${(()=>{   // moč je lahko po sejah različna (npr. MG na polnilnici in na 20 m kablu)
+        const kws=[...new Set(r.sessions.map(se=>se.kw).filter(v=>v!=null))].sort((a,b)=>b-a);
+        if(!kws.length) return "-";
+        const f=v=>(v%1===0?v.toFixed(0):v.toFixed(1)).replace(".",",");
+        return kws.map(f).join(" / ")+" kW";
+      })()}</td>`+
       `<td>${durH.toFixed(1)} h</td><td>${r.kwh.toFixed(1)} kWh</td>`+
       `<td>${avgPrice.toFixed(1)} c€/kWh</td><td>${r.costEUR.toFixed(2)} €</td></tr>`;
   });
   out.innerHTML=
     `<div class="evgantt" id="evGanttBox"></div>`+
     `<div class="tw"><table class="evtable">`+
-    `<tr><th>vozilo</th><th>okno</th><th>trajanje</th><th>energija</th><th>povpr. cena</th><th>strošek</th></tr>`+
+    `<tr><th>vozilo</th><th>okno</th><th>moč</th><th>trajanje</th><th>energija</th><th>povpr. cena</th><th>strošek</th></tr>`+
     rows+
-    `<tr class="sum"><td>skupaj</td><td></td><td></td><td>${totalKwh.toFixed(1)} kWh</td><td></td><td>${totalCost.toFixed(2)} €</td></tr>`+
+    `<tr class="sum"><td>skupaj</td><td></td><td></td><td></td><td>${totalKwh.toFixed(1)} kWh</td><td></td><td>${totalCost.toFixed(2)} €</td></tr>`+
     `</table></div>`+
     `<div class="evsum">Prag ${cap} c€/kWh je izločil ${skippedH.toFixed(1)} h dragih ur iz razpoložljivega okna. `+
-    `BMW in MG si delita 11 kW polnilnico (vrstni red izbere algoritem), Hyundai polni neodvisno na svoji 2 kW vtičnici. `+
+    (movedIoniq
+      ? `<b style="color:var(--energy)">Prestavi Hyundai na 11 kW polnilnico.</b> Tam polni 7,2 kW namesto 2 kW, `+
+        `zato se vsi trije vrstijo na istem priključku, skupno pa dobijo več energije. `
+      : `BMW in MG si delita 11 kW polnilnico (vrstni red izbere algoritem), Hyundai polni neodvisno na svoji 2 kW vtičnici. `+
+        (moveGain ? `Prestavljanje Hyundaija se tokrat ne izplača (${moveGain.kwh>=0?"+":""}${moveGain.kwh.toFixed(1)} kWh, ${moveGain.cost>=0?"+":""}${moveGain.cost.toFixed(2)} €). ` : ``))+
     (usedExt?`MG je za dopolnitev uporabil tudi izredno 20-metrsko vtičnico (oznaka *). `:``)+
     `Proti takojšnjemu polnjenju brez optimizacije (${naiveCost.toFixed(2)} €) ta razpored prihrani `+
     `<b style="color:var(--energy)">${savings.toFixed(2)} € (${savingsPct.toFixed(0)} %)</b>.`+
@@ -2175,7 +2219,7 @@ function renderEVGantt(containerId, future, results){
     r.sessions.forEach(se=>{
       const x0=xf(se.start.getTime()), x1=xf(se.end.getTime()), w=Math.max(3,x1-x0);
       bars+=`<rect x="${x0.toFixed(1)}" y="${y}" width="${w.toFixed(1)}" height="${rowH}" rx="6" fill="${r.car.color}" opacity="0.88">`+
-        `<title>${r.car.name}: ${dd2(se.start)} do ${dd2(se.end)}, ${se.kwh.toFixed(1)} kWh, ${se.costEUR.toFixed(2)} €</title></rect>`;
+        `<title>${r.car.name}: ${dd2(se.start)} do ${dd2(se.end)}, ${se.kw!=null?String(se.kw).replace(".",",")+" kW, ":""}${se.kwh.toFixed(1)} kWh, ${se.costEUR.toFixed(2)} €</title></rect>`;
     });
     const first2=r.sessions[0], x0=xf(first2.start.getTime());
     bars+=`<text x="${(x0+7).toFixed(1)}" y="${(y+rowH/2+4).toFixed(1)}" fill="#0d1014" font-size="12" font-weight="700" font-family="JetBrains Mono">${r.car.name.split(" ")[0]} &middot; ${r.kwh.toFixed(0)} kWh</text>`;

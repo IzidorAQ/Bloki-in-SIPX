@@ -381,7 +381,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-09-06 07:04</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-09-11 13:07</span>
     </div>
 
   </div>
@@ -805,19 +805,26 @@ function coversTomorrow(list){
   return max>=need;
 }
 let sipx429Until=0, sipx429Streak=0;   // spoštovanje omejitve vira (HTTP 429)
-let sipxLastCheck=null;                // kdaj smo nazadnje preverili vir
+let sipxLastCheck=null;                // kdaj smo nazadnje preverili vir (v tem zavihku)
+let sipxDataUpdated=null;              // kdaj je opravilo na GitHubu nazadnje osvežilo cene.json
 // Dokler jutrišnjih cen ni in je popoldne že mimo objave (po 14h), pokaži uro zadnjega
 // preverjanja, da je jasno, da aplikacija poizveduje in ne stoji.
 function renderLastCheck(){
   const el=document.getElementById("sipxCheck"); if(!el) return;
   const d=nowLjubljana();
-  const treba = !haveTomorrow() && d.getHours()>=14;
-  if(!treba || !sipxLastCheck){ el.textContent=""; return; }
-  const t=new Date(new Date(sipxLastCheck).toLocaleString("en-US",{timeZone:"Europe/Ljubljana"}));
-  const hh=String(t.getHours()).padStart(2,"0"), mm=String(t.getMinutes()).padStart(2,"0");
-  const minAgo=Math.floor((Date.now()-sipxLastCheck)/60000);
-  el.textContent=` \u00b7 cen za jutri še ni, zadnje preverjanje ob ${hh}:${mm}`
-    + (minAgo>=1?` (pred ${minAgo} min)`:``);
+  if(haveTomorrow() || d.getHours()<14){ el.textContent=""; return; }
+  // Čas odprtja strani ni koristen podatek, saj preverjanje sproži prav odprtje.
+  // Zato prikažemo, kdaj je cene nazadnje osvežilo opravilo v ozadju, ki teče tudi,
+  // kadar stran ni odprta. Če tega podatka ni, povemo le, da cen še ni.
+  const lj=ms=>{ const t=new Date(new Date(ms).toLocaleString("en-US",{timeZone:"Europe/Ljubljana"}));
+    return String(t.getHours()).padStart(2,"0")+":"+String(t.getMinutes()).padStart(2,"0"); };
+  if(sipxDataUpdated){
+    const min=Math.floor((Date.now()-sipxDataUpdated)/60000);
+    const starost = min<60 ? `pred ${min} min` : `pred ${Math.floor(min/60)} h ${min%60} min`;
+    el.textContent=` \u00b7 cen za jutri še ni · podatki osveženi ob ${lj(sipxDataUpdated)} (${starost})`;
+  } else {
+    el.textContent=` \u00b7 cen za jutri še ni`;
+  }
 }
 async function loadSIPX(){
   // SIPX cene za jutri objavijo med 13. in 14. uro; dokler imamo (skoraj) cel jutrišnji dan,
@@ -862,6 +869,8 @@ async function loadSIPX(){
   const local=await tryFetchJSON(`cene.json?t=${Math.floor(Date.now()/60000)}`);
   if(local.data && (local.data.unix_seconds||[]).length && pricesOf(local.data).length){
     got.push(local.data);
+    const up=Date.parse(local.data.updated||"");
+    if(!isNaN(up)) sipxDataUpdated=up;   // čas, ko je opravilo na GitHubu nazadnje osvežilo cene
   } else {
     tried.push(`<li>cene.json &rarr; ${local.err||"ni na voljo"}</li>`);
   }

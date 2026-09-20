@@ -25,10 +25,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
+      # setup-node ni potreben: ubuntu-latest ima Node že nameščen.
+      # S tem odpade tudi opozorilo o zastarelem Node.js 20 pri tem dejanju.
       - name: Pridobi cene
         id: fetch
         env:
@@ -47,4 +45,3 @@ jobs:
           else
             echo "Ni sprememb."
           fi
-          

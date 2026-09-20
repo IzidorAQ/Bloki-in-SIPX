@@ -34,14 +34,32 @@ jobs:
         run: node fetch-cene.js
 
       - name: Shrani, če so nove
+        env:
+          EUENERGY_TOKEN: ${{ secrets.EUENERGY_TOKEN }}
         run: |
-          if [ -n "$(git status --porcelain cene.json)" ]; then
-            git config user.name "cene-bot"
-            git config user.email "actions@github.com"
+          BR="${{ github.ref_name }}"
+          git config user.name "cene-bot"
+          git config user.email "actions@github.com"
+          for i in 1 2 3; do
+            if [ -z "$(git status --porcelain cene.json)" ]; then
+              echo "Ni sprememb."
+              exit 0
+            fi
             git add cene.json
-            git commit -m "cene: $(date -u +%Y-%m-%d\ %H:%M) UTC"
-            git push
-            echo "Shranjeno."
-          else
-            echo "Ni sprememb."
-          fi
+            git commit -q -m "cene: $(date -u +%Y-%m-%d\ %H:%M) UTC"
+            if git push origin HEAD:"$BR"; then
+              echo "Shranjeno."
+              exit 0
+            fi
+            # Medtem se je daljava premaknila (npr. rocno nalozena datoteka).
+            # Odvrzemo svoj commit, se poravnamo z daljavo in cene zgradimo znova
+            # nad najnovejso razlicico, da se nobena sprememba ne izgubi.
+            echo "Potisk zavrnjen (poskus $i). Poravnavam z daljavo in gradim znova."
+            git reset --hard -q HEAD~1
+            git fetch -q origin "$BR"
+            git reset --hard -q "origin/$BR"
+            node fetch-cene.js
+            sleep 3
+          done
+          echo "Potisk ni uspel niti po treh poskusih."
+          exit 1

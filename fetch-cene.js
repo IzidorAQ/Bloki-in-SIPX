@@ -29,18 +29,29 @@ function ljMidnight(y, m, d) {
   return t;
 }
 
-async function getJSON(url, headers) {
-  const ctrl = new AbortController();
-  const to = setTimeout(() => ctrl.abort(), 20000);
-  try {
-    const r = await fetch(url, { signal: ctrl.signal, headers: headers || {} });
-    clearTimeout(to);
-    if (!r.ok) return { err: "HTTP " + r.status };
-    return { data: await r.json() };
-  } catch (e) {
-    clearTimeout(to);
-    return { err: e.message };
+const UA = { "User-Agent": "omreznina-semafor/1.0 (+github actions)", "Accept": "application/json" };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Vir občasno odpove ali omeji dostop, zato vsak naslov poskusimo večkrat z naraščajočim premorom.
+async function getJSON(url, headers, tries) {
+  tries = tries || 3;
+  let last = { err: "?" };
+  for (let i = 0; i < tries; i++) {
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 25000);
+    try {
+      const r = await fetch(url, { signal: ctrl.signal, headers: Object.assign({}, UA, headers || {}) });
+      clearTimeout(to);
+      if (r.ok) return { data: await r.json() };
+      last = { err: "HTTP " + r.status };
+      if (r.status >= 400 && r.status < 500 && r.status !== 429) return last;
+    } catch (e) {
+      clearTimeout(to);
+      last = { err: e.name === "AbortError" ? "casovna omejitev" : e.message };
+    }
+    if (i < tries - 1) await sleep(5000 * (i + 1));
   }
+  return last;
 }
 
 function pricesOf(j) {
@@ -134,8 +145,14 @@ async function fromEuenergy(token, log) {
   const hi = ljMidnight(d.getFullYear(), d.getMonth(), d.getDate() + KEEP_FWD + 1) / 1000;
   const keys = [...merged.keys()].filter((s) => s >= lo && s < hi).sort((a, b) => a - b);
   if (!keys.length) {
-    console.error("Ni nobene cene, datoteke ne pišem.");
+    console.error("Noben vir ni vrnil cen.");
     log.forEach((l) => console.error("  " + l));
+    // Ce obstojeca datoteka se pokriva pretekle dni, opravila ne podremo: stran deluje naprej,
+    // naslednji zagon pa poskusi znova. Napako javimo le, kadar cen res nimamo nikjer.
+    if (before > 0) {
+      console.error("Obstojeca cene.json ostaja nedotaknjena, opravilo ni neuspesno.");
+      process.exit(0);
+    }
     process.exit(1);
   }
 

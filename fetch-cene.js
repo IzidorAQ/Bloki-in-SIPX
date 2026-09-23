@@ -160,17 +160,23 @@ async function fromEuenergy(token, log) {
     unix_seconds: keys,
     price: keys.map((k) => merged.get(k)),
     unit: "EUR / MWh",
-    updated: new Date().toISOString(),
+    checked: new Date().toISOString(),          // vsak zagon, tudi ce novih cen ni
+    updated: new Date().toISOString(),          // popravljeno spodaj, ce se cene niso spremenile
     source: "energy-charts.info; rezerva euenergy.live (CC-BY-4.0)",
     log,
   };
 
   const prev = fs.existsSync(OUT) ? fs.readFileSync(OUT, "utf8") : "";
-  const next = JSON.stringify(out);
-  fs.writeFileSync(OUT, next);
+  let next = JSON.stringify(out);
 
   const cmp = (t) => { try { const j = JSON.parse(t); return JSON.stringify([j.unix_seconds, j.price]); } catch (e) { return ""; } };
   const changed = cmp(prev) !== cmp(next);
+  // ce se cene niso spremenile, ohranimo prejsnji cas spremembe; "checked" pa je vedno svez
+  if (!changed) {
+    try { const old = JSON.parse(prev); if (old.updated) out.updated = old.updated; } catch (e) {}
+  }
+  next = JSON.stringify(out);
+  fs.writeFileSync(OUT, next);
   console.log(`vrednosti: ${before} -> ${afterEC} -> ${keys.length} | spremenjeno: ${changed ? "da" : "ne"}`);
   log.forEach((l) => console.log("  " + l));
   fs.writeFileSync(process.env.GITHUB_OUTPUT || "/dev/null", `changed=${changed ? "1" : "0"}\n`, { flag: "a" });

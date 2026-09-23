@@ -385,7 +385,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-09-21 06:58</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-09-23 13:35</span>
     </div>
 
   </div>
@@ -810,7 +810,8 @@ function coversTomorrow(list){
 }
 let sipx429Until=0, sipx429Streak=0;   // spoštovanje omejitve vira (HTTP 429)
 let sipxLastCheck=null;                // kdaj smo nazadnje preverili vir (v tem zavihku)
-let sipxDataUpdated=null;              // kdaj je opravilo na GitHubu nazadnje osvežilo cene.json
+let sipxDataUpdated=null;              // kdaj je opravilo na GitHubu nazadnje preverilo vir
+let sipxPricesChanged=null;            // kdaj so se cene nazadnje spremenile
 // Dokler jutrišnjih cen ni in je popoldne že mimo objave (po 14h), pokaži uro zadnjega
 // preverjanja, da je jasno, da aplikacija poizveduje in ne stoji.
 function renderLastCheck(){
@@ -825,7 +826,7 @@ function renderLastCheck(){
   if(sipxDataUpdated){
     const min=Math.floor((Date.now()-sipxDataUpdated)/60000);
     const starost = min<60 ? `pred ${min} min` : `pred ${Math.floor(min/60)} h ${min%60} min`;
-    el.textContent=` \u00b7 cen za jutri še ni · podatki osveženi ob ${lj(sipxDataUpdated)} (${starost})`;
+    el.textContent=` \u00b7 cen za jutri še ni · vir preverjen ob ${lj(sipxDataUpdated)} (${starost})`;
   } else {
     el.textContent=` \u00b7 cen za jutri še ni`;
   }
@@ -873,8 +874,10 @@ async function loadSIPX(){
   const local=await tryFetchJSON(`cene.json?t=${Math.floor(Date.now()/60000)}`);
   if(local.data && (local.data.unix_seconds||[]).length && pricesOf(local.data).length){
     got.push(local.data);
+    const ck=Date.parse(local.data.checked||local.data.updated||"");
+    if(!isNaN(ck)) sipxDataUpdated=ck;   // kdaj je opravilo na GitHubu nazadnje PREVERILO vir
     const up=Date.parse(local.data.updated||"");
-    if(!isNaN(up)) sipxDataUpdated=up;   // čas, ko je opravilo na GitHubu nazadnje osvežilo cene
+    if(!isNaN(up)) sipxPricesChanged=up; // kdaj so se cene nazadnje dejansko spremenile
   } else {
     tried.push(`<li>cene.json &rarr; ${local.err||"ni na voljo"}</li>`);
   }

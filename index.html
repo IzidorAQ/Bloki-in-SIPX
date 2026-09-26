@@ -379,17 +379,17 @@
         <label for="ev_ext" style="font-size:14px;color:var(--mut)">dovoli še 2 kW vtičnico na 20 m kablu (uporabi jo lahko katerikoli avto)</label>
       </div>
       <div class="row" style="margin-top:10px;display:flex;gap:16px;flex-wrap:wrap;font-size:14px;color:var(--mut)">
-        <label><input type="radio" name="ev_mode" value="cheap" checked> najcenejše (več prestavljanja)</label>
-        <label><input type="radio" name="ev_mode" value="few"> manj prestavljanja</label>
+        <label><input type="radio" name="ev_mode" value="few" checked> brez preparkiranja</label>
+        <label><input type="radio" name="ev_mode" value="cheap"> preparkiraj, če se splača</label>
       </div>
       <button class="evbtn" onclick="calcEVSchedule()">Izračunaj razpored</button>
       <div id="evResult"></div>
       <div class="sipxlist evlist" id="evPriceList"></div>
-      <div class="note" id="evnote">Uporablja že naložene cene (danes, in jutri, ko so objavljene) ter dejansko tarifno postavko omrežnine glede na uro. Tri polnilna mesta delujejo hkrati: 11 kW polnilnica, 2,5 kW vtičnica in 2 kW vtičnica na 20 m kablu. Vsako mesto polni en avto naenkrat, med dnevom pa se lahko preda naprej (ko je BMW poln, gre 11 kW na naslednjega). Razporeja se po četrturah, zato avto, ki konča sredi ure, mesto takoj sprosti naslednjemu. Nad 90 % se polnjenje upočasni (uravnoteženje celic), zato avto takrat prepusti 11 kW polnilnico drugemu in dokonča na vtičnici; privzeti meji sta ocena in ju lahko popraviš v kodi (taperFrom, taperKw). Razpored gleda naprej: avto, ki bi pri svoji največji moči komaj ujel konec poceni okna, dobi hitro polnilnico prej, drugi pa medtem polnijo počasneje na vtičnicah, da do konca okna ostanejo zasedena vsa mesta. Avto sicer ostane na svojem mestu, dokler se premik ne izplača. Privzeti izkoristek AC polnjenja je 90 % (izgube v polnilniku in bateriji). Kljukici razširita nabor mest: prva dovoli zamenjavo med 11 kW polnilnico in 2,5 kW vtičnico (kdor je izrinjen s polnilnice, polni naprej na vtičnici), druga doda 2 kW vtičnico na 20 m kablu. Kapaciteto baterij, moč polnjenja in vire lahko po potrebi prilagodiš v kodi (EV_CARS, POINTS).</div>
+      <div class="note" id="evnote">Uporablja že naložene cene (danes, in jutri, ko so objavljene) ter dejansko tarifno postavko omrežnine glede na uro. Tri polnilna mesta delujejo hkrati: 11 kW polnilnica, 2,5 kW vtičnica in 2 kW vtičnica na 20 m kablu. Vsako mesto polni en avto naenkrat, med dnevom pa se lahko preda naprej (ko je BMW poln, gre 11 kW na naslednjega). Razporeja se po četrturah, zato avto, ki konča sredi ure, mesto takoj sprosti naslednjemu. Nad 90 % se polnjenje upočasni (uravnoteženje celic), zato avto takrat prepusti 11 kW polnilnico drugemu in dokonča na vtičnici; privzeti meji sta ocena in ju lahko popraviš v kodi (taperFrom, taperKw). Razpored gleda naprej: avto, ki bi pri svoji največji moči komaj ujel konec poceni okna, dobi hitro polnilnico prej, drugi pa medtem polnijo počasneje na vtičnicah, da do konca okna ostanejo zasedena vsa mesta. Avto sicer ostane na svojem mestu, dokler se premik ne izplača. Privzeti izkoristek AC polnjenja je 90 % (izgube v polnilniku in bateriji). BMW in MG stojita v dosegu 11 kW polnilnice, zato je predaja med njima le preklop kabla. Da pride Hyundai na polnilnico, se mora eden od njiju umakniti na Hyundaijevo mesto; to je preparkiranje dveh avtov, med katerim ne polnita (ocena: 5 minut). Aplikacija preizkusi vse smiselne trenutke za tako zamenjavo in ti pove, ali se splača. Razpored oceni tako, da vsak kWh ovrednoti po tvojem pragu cene. Druga kljukica doda 2 kW vtičnico na 20 m kablu, ki doseže katerokoli mesto. Kapaciteto baterij, moč polnjenja in vire lahko po potrebi prilagodiš v kodi (EV_CARS, POINTS).</div>
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-09-26 11:53</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-09-26 13:02</span>
     </div>
 
   </div>
@@ -1946,116 +1946,133 @@ function permute(arr){
   return res;
 }
 
-// Razporedi polnjenje po URAH z DODELJEVANJEM POLNILNIH MEST.
-// Vsa mesta lahko delujejo hkrati; vsako mesto polni največ en avto naenkrat, vsak avto je
-// največ na enem mestu. Med urami se mesta lahko predajo naprej (ko je BMW poln, gre 11 kW na MG).
-// Ure obdelamo od NAJCENEJŠE naprej, da se energija nabere v najcenejših terminih.
-function assignSchedule(cars, hours, moveIoniq, extMG, sticky, alpha){
-  alpha=alpha||0;
-  const need={}; cars.forEach(c=>need[c.id]=c.needKwh);
-  const ptIds=Object.keys(POINTS).sort((x,y)=>POINTS[y].kw-POINTS[x].kw);  // od najmočnejšega
+// ===================================================================================
+// PARKIRNA MESTA IN PREMIKI
+// Polnilnica 11 kW doseže DVE parkirni mesti (cona W), kjer običajno stojita BMW in MG.
+// 2,5 kW vtičnica je na Hyundaijevem mestu (cona C, eno mesto). 2 kW vtičnica na 20 m
+// kablu doseže katerokoli mesto. Ločimo:
+//  - PREKLOP KABLA: avto ostane parkiran, prestavi se le vtič (npr. 11 kW z BMW na MG,
+//    ki stojita drug ob drugem). Skoraj brez stroška.
+//  - PREPARKIRANJE: Hyundai gre na mesto ob polnilnici, zato se BMW ali MG umakne na
+//    Hyundaijevo mesto. Dva avta se premakneta, med premikom ne polnita.
+// Preparkiranje ni odločitev za vsako četrturo, ampak ENKRATNA sprememba razporeda
+// parkiranja ob izbranem času. Preizkusimo vse smiselne možnosti in izberemo najboljšo.
+// POZOR: čas premika (REPARK_PAUSE) je OCENA, popravi po izkušnji.
+const ZONE_OF_POINT={wb:"W", sockI:"C", sockE:null};   // null = kabel doseže, kjerkoli avto stoji
+const HOME_ZONE={bmw:"W", mg:"W", ioniq:"C"};
+const REPARK_PAUSE=1/3;   // del četrture, ko avto med premikom ne polni (~5 min)
 
-  // 1. korak: izberi, KATERE ure sploh uporabimo - najcenejše najprej
-  const used=new Set();
-  hours.slice().sort((a,b)=>a.price-b.price || a.t-b.t).forEach(h=>{
-    if(Object.values(need).every(v=>v<=0.01)) return;
-    const frac=(h.frac||1)*0.25; const busy=new Set(); let touched=false;
-    ptIds.forEach(pid=>{
-      let best=null;
-      cars.forEach(c=>{
-        if(busy.has(c.id) || need[c.id]<=0.01) return;
-        if(!allowedPoints(c.id, moveIoniq, extMG).includes(pid)) return;
-        const socNow=c.tgt-(need[c.id]/c.batt)*100;
-        const kwh=Math.min(Math.min(powerAtSoc(c,socNow),POINTS[pid].kw)*EV_EFF*frac, need[c.id]);
-        if(!best || kwh>best.kwh+1e-9) best={id:c.id, kwh};
-      });
-      if(best){ busy.add(best.id); need[best.id]-=best.kwh; touched=true; }
-    });
-    if(touched) used.add(h.t.getTime());
-  });
-
-  // 2. korak: znotraj izbranih ur razporedi ČASOVNO in z VZTRAJNOSTJO - avto ostane na
-  // svojem mestu, dokler ne konča, da ni nesmiselnega prestavljanja sem in tja.
-  cars.forEach(c=>need[c.id]=c.needKwh);
-  const plan=[], holder={}, carAt={};   // kje je bil vsak avto prejšnjo četrturo
-  const seq=hours.filter(h=>used.has(h.t.getTime())).sort((a,b)=>a.t-b.t);
-  seq.forEach((h,si)=>{
-    const remSlots=seq.length-si;   // koliko četrtur še ostane do konca okna
-    const frac=(h.frac||1)*0.25, slotAt={};
-    // Pri treh avtih in treh mestih preizkusimo VSE razporeditve (največ nekaj deset) in
-    // izberemo tisto z največ energije. Premik avta na drugo mesto stane 1 kW, zato ostane,
-    // kjer je, razen kadar se premik res izplača (npr. ko se prejšnji avto upočasni).
-    const tol=1.0*EV_EFF*frac;
-    const live=cars.filter(c=>need[c.id]>0.01);
-    const gain=(c,pid)=>{
-      const soc=c.tgt-(need[c.id]/c.batt)*100;
-      return Math.min(Math.min(powerAtSoc(c,soc),POINTS[pid].kw)*EV_EFF*frac, need[c.id]);
-    };
-    // Nujnost: koliko četrtur avto še potrebuje pri največji moči, ki jo lahko dobi,
-    // v razmerju do preostalih četrtur. Blizu 1 ali več pomeni, da bo zmanjkalo časa.
-    const urg={};
-    live.forEach(c=>{
-      const soc=c.tgt-(need[c.id]/c.batt)*100;
-      const best=Math.min(powerAtSoc(c,soc), POINTS.wb.kw)*EV_EFF*frac;
-      urg[c.id]= best>0 ? Math.min(3, (need[c.id]/best)/remSlots) : 0;
-    });
-    let bestSet=null, bestV=-Infinity, bestK=-1;
-    const walk=(i, used, cur, v, k)=>{
-      if(i===live.length){
-        if(v>bestV+1e-9 || (Math.abs(v-bestV)<=1e-9 && k>bestK+1e-9)){ bestV=v; bestK=k; bestSet=cur.slice(); }
-        return;
-      }
-      const c=live[i];
-      walk(i+1, used, cur, v, k);                                   // ta avto ta četrturo ne polni
-      allowedPoints(c.id,moveIoniq,extMG).forEach(pid=>{
-        if(used.has(pid)) return;
-        const g=gain(c,pid); if(g<=0) return;
-        const pen=(sticky!==false && carAt[c.id] && carAt[c.id]!==pid) ? tol : 0;
-        used.add(pid); cur.push([c,pid,g]);
-        walk(i+1, used, cur, v+g*(1+alpha*urg[c.id])-pen, k+g);
-        cur.pop(); used.delete(pid);
-      });
-    };
-    walk(0, new Set(), [], 0, 0);
-    (bestSet||[]).forEach(([c,pid,g])=>{
-      const soc=c.tgt-(need[c.id]/c.batt)*100;
-      const kw=Math.min(powerAtSoc(c,soc),POINTS[pid].kw);
-      need[c.id]-=g; slotAt[c.id]=pid;
-      plan.push({ts:h.t.getTime(), carId:c.id, pointId:pid, kw, kwh:g, price:h.price});
-    });
-    // avto ostane parkiran tam, kjer je polnil; če četrturo ne polni, ostane na istem mestu
-    Object.assign(carAt, slotAt);
-  });
-  return {plan, need};
+// dovoljena mesta za avto glede na to, kje je parkiran
+function pointsForZone(z, extMG){
+  const p=Object.keys(ZONE_OF_POINT).filter(pid=>ZONE_OF_POINT[pid]===z);
+  return extMG ? p.concat("sockE") : p;
 }
 
-// Razporejanje od NAJCENEJŠE četrture naprej: poceni ure se zapolnijo z največjo močjo,
-// drage dobijo le ostanek. Ceneje, a z več prestavljanja, ker avti ne gredo po vrsti v času.
-function assignCheapFirst(cars, slots, moveIoniq, extMG, tolKw){
+// Razpored ob DANEM razporedu parkiranja. layout(si) vrne cone avtov v četrturi si.
+function scheduleLayout(cars, hours, extMG, layout, opts){
+  opts=opts||{}; const alpha=opts.alpha||0, beta=opts.beta||0;
   const need={}; cars.forEach(c=>need[c.id]=c.needKwh);
-  const at={}, plan=[];
-  const nb=(cid,ts)=>{ const a=at[ts-EV_SLOT_MS], b=at[ts+EV_SLOT_MS]; return (a&&a[cid])||(b&&b[cid])||null; };
-  slots.slice().sort((a,b)=>a.price-b.price || a.t-b.t).forEach(h=>{
-    const ts=h.t.getTime(), frac=(h.frac||1)*0.25, tol=tolKw*EV_EFF*frac;
+  const ids=cars.map(c=>c.id);
+  const all=hours.slice().sort((a,b)=>a.t-b.t);
+  const idxOf=new Map(all.map((h,i)=>[h.t.getTime(),i]));
+  const ptIds=Object.keys(POINTS).sort((x,y)=>POINTS[y].kw-POINTS[x].kw);
+
+  // 1. korak: katere četrture uporabiti - najcenejše najprej, z ENAKIMI pravili parkiranja
+  const used=new Set();
+  if(!opts.naive){
+    all.slice().sort((a,b)=>a.price-b.price || a.t-b.t).forEach(h=>{
+      if(ids.every(id=>need[id]<=0.01)) return;
+      const z=layout(idxOf.get(h.t.getTime())), frac=(h.frac||1)*0.25, busy=new Set(); let touched=false;
+      ptIds.forEach(pid=>{
+        let best=null;
+        cars.forEach(c=>{
+          if(busy.has(c.id)||need[c.id]<=0.01) return;
+          if(!pointsForZone(z[c.id],extMG).includes(pid)) return;
+          const soc=c.tgt-(need[c.id]/c.batt)*100;
+          const kwh=Math.min(Math.min(powerAtSoc(c,soc),POINTS[pid].kw)*EV_EFF*frac, need[c.id]);
+          if(!best||kwh>best.kwh+1e-9) best={id:c.id,kwh};
+        });
+        if(best){ busy.add(best.id); need[best.id]-=best.kwh; touched=true; }
+      });
+      if(touched) used.add(h.t.getTime());
+    });
+  }
+
+  // 2. korak: po času; ob spremembi parkiranja avto tisto četrturo polni le deloma
+  ids.forEach(id=>need[id]=cars.find(c=>c.id===id).needKwh);
+  const wide = beta>0 || opts.naive;
+  const seq=all.filter(h=>wide || used.has(h.t.getTime()));
+  const prices=seq.map(h=>h.price);
+  const pRange=Math.max(1, Math.max(...prices,0)-Math.min(...prices,0));
+  const plan=[]; let replugs=0; const lastPt={};
+  seq.forEach((h,si)=>{
+    const gi=idxOf.get(h.t.getTime());
+    const z=layout(gi), zPrev=gi>0?layout(gi-1):z;
+    const frac=(h.frac||1)*0.25, remSlots=seq.length-si;
+    let pMinFut=Infinity; for(let k=si;k<seq.length;k++) pMinFut=Math.min(pMinFut,seq[k].price);
+    const regret=Math.max(0,(h.price-pMinFut)/pRange);
     const live=cars.filter(c=>need[c.id]>0.01);
-    const gain=(c,pid)=>{ const soc=c.tgt-(need[c.id]/c.batt)*100;
-      return Math.min(Math.min(powerAtSoc(c,soc),POINTS[pid].kw)*EV_EFF*frac, need[c.id]); };
-    let best=null,bv=-1,bk=-1;
-    const walk=(i,used,cur,v,k)=>{
-      if(i===live.length){ if(v>bv+1e-9||(Math.abs(v-bv)<=1e-9&&k>bk)){bv=v;bk=k;best=cur.slice();} return; }
-      const c=live[i]; walk(i+1,used,cur,v,k);
-      allowedPoints(c.id,moveIoniq,extMG).forEach(pid=>{ if(used.has(pid)) return;
-        const g=gain(c,pid); if(g<=0) return;
-        const n=nb(c.id,ts); const pen=(n&&n!==pid)?tol:0;
-        used.add(pid); cur.push([c,pid,g]); walk(i+1,used,cur,v+g-pen,k+g); cur.pop(); used.delete(pid); });
+    const urg={};
+    live.forEach(c=>{ const soc=c.tgt-(need[c.id]/c.batt)*100;
+      const best=Math.min(powerAtSoc(c,soc),POINTS.wb.kw)*EV_EFF*frac;
+      urg[c.id]= best>0 ? Math.min(3,(need[c.id]/best)/remSlots) : 0; });
+    let bestSet=null,bestV=-Infinity,bestK=-1;
+    const walk=(i,usedPt,cur,v,k)=>{
+      if(i===live.length){ if(v>bestV+1e-9||(Math.abs(v-bestV)<=1e-9&&k>bestK+1e-9)){bestV=v;bestK=k;bestSet=cur.slice();} return; }
+      const c=live[i]; walk(i+1,usedPt,cur,v,k);
+      const moving = z[c.id]!==zPrev[c.id];
+      pointsForZone(z[c.id],extMG).forEach(pid=>{
+        if(usedPt.has(pid)) return;
+        const soc=c.tgt-(need[c.id]/c.batt)*100;
+        let g=Math.min(Math.min(powerAtSoc(c,soc),POINTS[pid].kw)*EV_EFF*frac, need[c.id]);
+        if(moving) g*=(1-REPARK_PAUSE);
+        if(g<=0) return;
+        const w=1+alpha*urg[c.id]-beta*regret;
+        usedPt.add(pid); cur.push([c,pid,g]); walk(i+1,usedPt,cur,v+g*w,k+g); cur.pop(); usedPt.delete(pid);
+      });
     };
     walk(0,new Set(),[],0,0);
-    at[ts]={};
-    (best||[]).forEach(([c,pid,g])=>{ const soc=c.tgt-(need[c.id]/c.batt)*100;
-      need[c.id]-=g; at[ts][c.id]=pid;
-      plan.push({ts,carId:c.id,pointId:pid,kw:Math.min(powerAtSoc(c,soc),POINTS[pid].kw),kwh:g,price:h.price}); });
+    (bestSet||[]).forEach(([c,pid,g])=>{
+      const soc=c.tgt-(need[c.id]/c.batt)*100;
+      if(lastPt[c.id] && lastPt[c.id]!==pid) replugs++;
+      lastPt[c.id]=pid; need[c.id]-=g;
+      plan.push({ts:h.t.getTime(),carId:c.id,pointId:pid,kw:Math.min(powerAtSoc(c,soc),POINTS[pid].kw),kwh:g,price:h.price});
+    });
   });
-  return {plan,need};
+  return {plan,need,replugs};
+}
+
+// Preizkusi razporede parkiranja: domači (Hyundai na svojem mestu) in, če je dovoljeno,
+// zamenjavo Hyundaija z BMW ali MG ob vsaki polni uri. Vrne vse izračunane različice.
+function assignSchedule(cars, hours, moveIoniq, extMG, opts){
+  const all=hours.slice().sort((a,b)=>a.t-b.t);
+  const home=()=>({...HOME_ZONE});
+  const variants=[{layout:home, reparks:0, desc:null}];
+  if(moveIoniq){
+    const changes=[0];
+    all.forEach((h,i)=>{ if(i>0 && h.t.getMinutes()===0) changes.push(i); });
+    ["bmw","mg"].forEach(x=>{
+      changes.forEach(k=>{
+        variants.push({
+          layout: si=> si>=k ? {...HOME_ZONE, ioniq:"W", [x]:"C"} : {...HOME_ZONE},
+          reparks: 2, desc:{car:x, at:all[k]?all[k].t:null}
+        });
+      });
+    });
+  }
+  const outAll=[];
+  let best=null;
+  variants.forEach(v=>{
+    const r=scheduleLayout(cars, hours, extMG, v.layout, opts||{});
+    r.reparks=v.reparks; r.swap=v.desc;
+    const kwh=r.plan.reduce((a,x)=>a+x.kwh,0), cost=r.plan.reduce((a,x)=>a+x.price*x.kwh/100,0);
+    r._kwh=kwh; r._cost=cost; outAll.push(r);
+    // znotraj ene nastavitve: največ energije, ob enakem izkupičku manj preparkiranj, nato cena
+    if(!best || kwh>best._kwh+0.05 ||
+       (Math.abs(kwh-best._kwh)<=0.05 && (r.reparks<best.reparks || (r.reparks===best.reparks && cost<best._cost-0.005))))
+      best=r;
+  });
+  return (opts&&opts.all) ? outAll : best;
 }
 
 // iz načrta sestavi seje po vozilih (zaporedne ure na ISTEM mestu se združijo)
@@ -2125,36 +2142,38 @@ function calcEVSchedule(){
   // skupaj načrpa največ energije (ob enakem izkupičku manj premikov, nato cenejšega).
   // Jakost 0 je stari kratkovidni razpored, zato nov rezultat ne more biti slabši od njega.
   const slots=toSlots(poolAll);
-  const score=r=>{
-    const kwh=r.plan.reduce((a,x)=>a+x.kwh,0);
-    const cost=r.plan.reduce((a,x)=>a+x.price*x.kwh/100,0);
-    const last={}; let moves=0;
-    r.plan.slice().sort((a,b)=>a.ts-b.ts).forEach(x=>{
-      if(last[x.carId] && last[x.carId]!==x.pointId) moves++;
-      last[x.carId]=x.pointId; });
-    return {kwh, cost, moves};
-  };
-  let opt=null, optS=null;
-  [0,0.25,0.5,1,1.5,2,3,4,8].forEach(a=>{
-    const r=assignSchedule(cars.map(c=>({...c})), slots, moveIoniq, extOn, true, a);
-    const sc=score(r);
-    const better = !optS
-      || sc.kwh > optS.kwh+0.05
-      || (Math.abs(sc.kwh-optS.kwh)<=0.05 && (sc.moves<optS.moves || (sc.moves===optS.moves && sc.cost<optS.cost-0.005)));
-    if(better){ opt=r; optS=sc; }
+  const score=r=>({ kwh:r.plan.reduce((a,x)=>a+x.kwh,0),
+                    cost:r.plan.reduce((a,x)=>a+x.price*x.kwh/100,0),
+                    reparks:r.reparks, replugs:r.replugs });
+  // Izračunamo vse razporede (več jakosti pogleda naprej in zadržanosti, vsak razpored parkiranja).
+  const runs=[];
+  [0,0.25,0.5,1,2,4].forEach(a=>{ [0,0.5,1,2,4].forEach(bt=>{
+    assignSchedule(cars.map(c=>({...c})), slots, moveIoniq, extOn, {alpha:a, beta:bt, all:true})
+      .forEach(r=>runs.push({r, s:score(r)}));
+  }); });
+  // IZBIRA RAZPOREDA. Vsak kWh ima zate vrednost, ki si jo določil s pragom cene (cap):
+  // pripravljen si plačati do cap c€/kWh. Razpored zato ocenimo kot
+  //     korist = energija x prag - strošek
+  // Tako se dodatna energija izbere le, če jo dobiš ceneje od praga, brez ostrih mej
+  // (npr. "98 % energije"), pri katerih bi 0,05 kWh razlike odločilo o pol evra.
+  //  - "najcenejše": največja korist med vsemi razporedi
+  //  - "čim manj preparkiranja": največja korist med razporedi BREZ preparkiranja
+  const val=sc=>sc.kwh*cap/100 - sc.cost;
+  let few=null, fewS=null, cheap=null, cheapS=null;
+  runs.forEach(({r,s:sc})=>{
+    if(sc.reparks===0 && (!fewS || val(sc)>val(fewS)+0.005 ||
+       (Math.abs(val(sc)-val(fewS))<=0.005 && sc.replugs<fewS.replugs))){ few=r; fewS=sc; }
+    if(!cheapS || val(sc)>val(cheapS)+0.005 ||
+       (Math.abs(val(sc)-val(cheapS))<=0.005 && sc.reparks<cheapS.reparks)){ cheap=r; cheapS=sc; }
   });
-  // Druga možnost: od najcenejše četrture naprej. Obe izračunamo in prikažemo primerjavo,
-  // izbira pa je uporabnikova: nižja cena pomeni praviloma več prestavljanja avtov.
-  const cheap=assignCheapFirst(cars.map(c=>({...c})), slots, moveIoniq, extOn, 1.0);
-  const cheapS=score(cheap);
-  const mode=(document.querySelector('input[name="ev_mode"]:checked')||{value:"cheap"}).value;
-  const alts={few:{r:opt,s:optS}, cheap:{r:cheap,s:cheapS}};
-  opt = alts[mode].r;
+  const mode=(document.querySelector('input[name="ev_mode"]:checked')||{value:"few"}).value;
+  const alts={few:{r:few,s:fewS}, cheap:{r:cheap,s:cheapS}};
+  const opt = alts[mode].r;
   const results=planToResults(cars, opt.plan);
   const capped=Object.values(opt.need).some(v=>v>0.05);
 
   // primerjava: enaka mesta, a takoj in po vrsti (brez izbiranja cenejših ur in brez praga)
-  const naive=assignSchedule(cars, toSlots(future.slice().sort((a,b)=>a.t-b.t)), moveIoniq, extOn);
+  const naive=assignSchedule(cars, toSlots(future.slice().sort((a,b)=>a.t-b.t)), moveIoniq, extOn, {naive:true});
   const naiveCost=naive.plan.reduce((a,x)=>a+x.price*x.kwh/100,0);
 
   displayEVResult(future, results, naiveCost, capped, cap, skippedH, extOn, startFrom, opt, alts, mode);
@@ -2261,17 +2280,29 @@ function displayEVResult(future, results, naiveCost, capped, cap, skippedH, extO
         const names=seq[pid].sort((a,b)=>a.t-b.t).map(x=>x.n).filter((v,i,a)=>i===0||v!==a[i-1]);
         return `<b>${POINTS[pid].name}</b>: ${names.join(" &rarr; ")}`;
       }).join(" &middot; ");
-      // koliko krat je treba fizično prestaviti avto (vsaka menjava mesta pri istem avtu)
-      const premiki=results.reduce((a,r)=>{
-        let n=0; for(let i=1;i<r.sessions.length;i++) if(r.sessions[i].pointId!==r.sessions[i-1].pointId) n++;
-        return a+n; },0);
-      return (txt?txt+". ":"")+(premiki?`Za to je treba avte skupaj <b>${premiki}-krat</b> prestaviti. `:``);
+      // preparkiranja (avto zamenja parkirno mesto) in preklopi kabla (le vtič) ločeno
+      const rp=opt.reparks||0, rl=opt.replugs||0;
+      let opis="";
+      if(opt.swap){
+        const nm={bmw:"BMW",mg:"MG",ioniq:"Hyundai"};
+        const t=opt.swap.at, hh=t?String(t.getHours()).padStart(2,"0")+":"+String(t.getMinutes()).padStart(2,"0"):"";
+        opis+=`<b style="color:var(--energy)">Ob ${hh} preparkiraj: Hyundai na mesto ob 11 kW polnilnici, ${nm[opt.swap.car]} na Hyundaijevo mesto.</b> `;
+      }
+      if(rl) opis+=`Poleg tega kabel ${rl}&times; preklopiti (avti ostanejo parkirani). `;
+      return (txt?txt+". ":"")+opis;
     })())+
     (alts ? (()=>{ const a=alts.cheap.s, b=alts.few.s;
+       const ck=x=>(x.kwh>0?x.cost/x.kwh*100:0).toFixed(2);
+       const line=(on,label,x)=>`<b>${on?"&#10003; ":""}${label}:</b> ${x.cost.toFixed(2)} € za ${x.kwh.toFixed(1)} kWh `+
+         `(${ck(x)} c/kWh)${x.reparks?`, ${x.reparks}&times; preparkirati`:``}, kabel ${x.replugs}&times; preklopiti`;
+       const dK=a.kwh-b.kwh, dC=a.cost-b.cost;
+       const razlika = a.reparks>0 && dK>0.05
+         ? `<br><span style="color:var(--faint)">Preparkiranje prinese <b>${dK>=0?"+":""}${dK.toFixed(1)} kWh</b> za ${dC>=0?"+":""}${dC.toFixed(2)} €`+
+           `${dK>0?` (${(dC/dK*100).toFixed(1)} c/kWh za dodatno energijo)`:``}.</span>`
+         : (a.reparks===0 ? `<br><span style="color:var(--faint)">Preparkiranje se tokrat ne splača.</span>` : ``);
        return `<div style="margin:8px 0;padding:8px 10px;border:1px solid var(--line);border-radius:8px">`+
-         `<b>${mode==="cheap"?"&#10003; ":""}Najcenejše:</b> ${a.cost.toFixed(2)} €, ${a.kwh.toFixed(1)} kWh, ${a.moves}&times; prestaviti<br>`+
-         `<b>${mode==="few"?"&#10003; ":""}Manj prestavljanja:</b> ${b.cost.toFixed(2)} €, ${b.kwh.toFixed(1)} kWh, ${b.moves}&times; prestaviti`+
-         `</div>`; })() : ``)+
+         line(mode==="few","Brez preparkiranja",b)+`<br>`+
+         line(mode==="cheap","S preparkiranjem, če se splača",a)+razlika+`</div>`; })() : ``)+
     `Proti takojšnjemu polnjenju brez optimizacije (${naiveCost.toFixed(2)} €) ta razpored prihrani `+
     `<b style="color:var(--energy)">${savings.toFixed(2)} € (${savingsPct.toFixed(0)} %)</b>.`+
     (capped?` <span style="color:var(--b2)">Poceni ur (pod pragom) ni dovolj, da bi vsi avtomobili dosegli cilj; prikazano je najboljše možno.${extOn?'':' Vklopi izredni kabel za MG, če bi to pomagalo.'}</span>`:``)+

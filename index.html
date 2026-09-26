@@ -378,6 +378,10 @@
         <input id="ev_ext" type="checkbox" style="width:18px;height:18px">
         <label for="ev_ext" style="font-size:14px;color:var(--mut)">dovoli še 2 kW vtičnico na 20 m kablu (uporabi jo lahko katerikoli avto)</label>
       </div>
+      <div class="row" style="margin-top:10px;display:flex;gap:16px;flex-wrap:wrap;font-size:14px;color:var(--mut)">
+        <label><input type="radio" name="ev_mode" value="cheap" checked> najcenejše (več prestavljanja)</label>
+        <label><input type="radio" name="ev_mode" value="few"> manj prestavljanja</label>
+      </div>
       <button class="evbtn" onclick="calcEVSchedule()">Izračunaj razpored</button>
       <div id="evResult"></div>
       <div class="sipxlist evlist" id="evPriceList"></div>
@@ -385,7 +389,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-09-23 13:35</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-09-26 11:53</span>
     </div>
 
   </div>
@@ -2025,6 +2029,35 @@ function assignSchedule(cars, hours, moveIoniq, extMG, sticky, alpha){
   return {plan, need};
 }
 
+// Razporejanje od NAJCENEJŠE četrture naprej: poceni ure se zapolnijo z največjo močjo,
+// drage dobijo le ostanek. Ceneje, a z več prestavljanja, ker avti ne gredo po vrsti v času.
+function assignCheapFirst(cars, slots, moveIoniq, extMG, tolKw){
+  const need={}; cars.forEach(c=>need[c.id]=c.needKwh);
+  const at={}, plan=[];
+  const nb=(cid,ts)=>{ const a=at[ts-EV_SLOT_MS], b=at[ts+EV_SLOT_MS]; return (a&&a[cid])||(b&&b[cid])||null; };
+  slots.slice().sort((a,b)=>a.price-b.price || a.t-b.t).forEach(h=>{
+    const ts=h.t.getTime(), frac=(h.frac||1)*0.25, tol=tolKw*EV_EFF*frac;
+    const live=cars.filter(c=>need[c.id]>0.01);
+    const gain=(c,pid)=>{ const soc=c.tgt-(need[c.id]/c.batt)*100;
+      return Math.min(Math.min(powerAtSoc(c,soc),POINTS[pid].kw)*EV_EFF*frac, need[c.id]); };
+    let best=null,bv=-1,bk=-1;
+    const walk=(i,used,cur,v,k)=>{
+      if(i===live.length){ if(v>bv+1e-9||(Math.abs(v-bv)<=1e-9&&k>bk)){bv=v;bk=k;best=cur.slice();} return; }
+      const c=live[i]; walk(i+1,used,cur,v,k);
+      allowedPoints(c.id,moveIoniq,extMG).forEach(pid=>{ if(used.has(pid)) return;
+        const g=gain(c,pid); if(g<=0) return;
+        const n=nb(c.id,ts); const pen=(n&&n!==pid)?tol:0;
+        used.add(pid); cur.push([c,pid,g]); walk(i+1,used,cur,v+g-pen,k+g); cur.pop(); used.delete(pid); });
+    };
+    walk(0,new Set(),[],0,0);
+    at[ts]={};
+    (best||[]).forEach(([c,pid,g])=>{ const soc=c.tgt-(need[c.id]/c.batt)*100;
+      need[c.id]-=g; at[ts][c.id]=pid;
+      plan.push({ts,carId:c.id,pointId:pid,kw:Math.min(powerAtSoc(c,soc),POINTS[pid].kw),kwh:g,price:h.price}); });
+  });
+  return {plan,need};
+}
+
 // iz načrta sestavi seje po vozilih (zaporedne ure na ISTEM mestu se združijo)
 function planToResults(cars, plan){
   const byCar={}; plan.forEach(x=>{ (byCar[x.carId]=byCar[x.carId]||[]).push(x); });
@@ -2110,6 +2143,13 @@ function calcEVSchedule(){
       || (Math.abs(sc.kwh-optS.kwh)<=0.05 && (sc.moves<optS.moves || (sc.moves===optS.moves && sc.cost<optS.cost-0.005)));
     if(better){ opt=r; optS=sc; }
   });
+  // Druga možnost: od najcenejše četrture naprej. Obe izračunamo in prikažemo primerjavo,
+  // izbira pa je uporabnikova: nižja cena pomeni praviloma več prestavljanja avtov.
+  const cheap=assignCheapFirst(cars.map(c=>({...c})), slots, moveIoniq, extOn, 1.0);
+  const cheapS=score(cheap);
+  const mode=(document.querySelector('input[name="ev_mode"]:checked')||{value:"cheap"}).value;
+  const alts={few:{r:opt,s:optS}, cheap:{r:cheap,s:cheapS}};
+  opt = alts[mode].r;
   const results=planToResults(cars, opt.plan);
   const capped=Object.values(opt.need).some(v=>v>0.05);
 
@@ -2117,7 +2157,7 @@ function calcEVSchedule(){
   const naive=assignSchedule(cars, toSlots(future.slice().sort((a,b)=>a.t-b.t)), moveIoniq, extOn);
   const naiveCost=naive.plan.reduce((a,x)=>a+x.price*x.kwh/100,0);
 
-  displayEVResult(future, results, naiveCost, capped, cap, skippedH, extOn, startFrom, opt);
+  displayEVResult(future, results, naiveCost, capped, cap, skippedH, extOn, startFrom, opt, alts, mode);
   renderEVPriceList(future, results, startFrom);
 }
 
@@ -2161,7 +2201,7 @@ function renderEVPriceList(future, results, startFrom){
   el.innerHTML=html;
 }
 
-function displayEVResult(future, results, naiveCost, capped, cap, skippedH, extOn, startFrom, opt){
+function displayEVResult(future, results, naiveCost, capped, cap, skippedH, extOn, startFrom, opt, alts, mode){
   const out=document.getElementById("evResult");
   const order={bmw:0,ioniq:1,mg:2};
   results=results.slice().sort((a,b)=>(order[a.car.id]??9)-(order[b.car.id]??9));
@@ -2226,7 +2266,13 @@ function displayEVResult(future, results, naiveCost, capped, cap, skippedH, extO
         let n=0; for(let i=1;i<r.sessions.length;i++) if(r.sessions[i].pointId!==r.sessions[i-1].pointId) n++;
         return a+n; },0);
       return (txt?txt+". ":"")+(premiki?`Za to je treba avte skupaj <b>${premiki}-krat</b> prestaviti. `:``);
-    })())+`Proti takojšnjemu polnjenju brez optimizacije (${naiveCost.toFixed(2)} €) ta razpored prihrani `+
+    })())+
+    (alts ? (()=>{ const a=alts.cheap.s, b=alts.few.s;
+       return `<div style="margin:8px 0;padding:8px 10px;border:1px solid var(--line);border-radius:8px">`+
+         `<b>${mode==="cheap"?"&#10003; ":""}Najcenejše:</b> ${a.cost.toFixed(2)} €, ${a.kwh.toFixed(1)} kWh, ${a.moves}&times; prestaviti<br>`+
+         `<b>${mode==="few"?"&#10003; ":""}Manj prestavljanja:</b> ${b.cost.toFixed(2)} €, ${b.kwh.toFixed(1)} kWh, ${b.moves}&times; prestaviti`+
+         `</div>`; })() : ``)+
+    `Proti takojšnjemu polnjenju brez optimizacije (${naiveCost.toFixed(2)} €) ta razpored prihrani `+
     `<b style="color:var(--energy)">${savings.toFixed(2)} € (${savingsPct.toFixed(0)} %)</b>.`+
     (capped?` <span style="color:var(--b2)">Poceni ur (pod pragom) ni dovolj, da bi vsi avtomobili dosegli cilj; prikazano je najboljše možno.${extOn?'':' Vklopi izredni kabel za MG, če bi to pomagalo.'}</span>`:``)+
     `</div>`;

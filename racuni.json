@@ -1,0 +1,190 @@
+{
+ "racuni": {
+  "2026-06": {
+   "racun": "IR32708612",
+   "obdobje": "18.6.-30.6.",
+   "kwh": 102,
+   "osnova": 16.78,
+   "ddv": 3.69,
+   "skupaj": 20.47,
+   "energija": 8.84,
+   "omreznina": 5.37,
+   "prispevki": 1.56,
+   "trosarina": 0.16,
+   "nadomestilo": 0.85
+  },
+  "2026-07": {
+   "racun": "IR33027039",
+   "obdobje": "1.7.-31.7.",
+   "kwh": 495,
+   "osnova": 48.62,
+   "ddv": 10.7,
+   "skupaj": 59.32,
+   "energija": 14.46,
+   "omreznina": 24.22,
+   "prispevki": 7.21,
+   "trosarina": 0.76,
+   "nadomestilo": 1.97,
+   "bloki": {
+    "2": 79,
+    "3": 291,
+    "4": 125,
+    "5": 0
+   }
+  },
+  "2026-08": {
+   "racun": "IR33344376",
+   "obdobje": "1.8.-31.8.",
+   "kwh": 920,
+   "osnova": 98,
+   "ddv": 21.56,
+   "skupaj": 119.56,
+   "energija": 36.18,
+   "omreznina": 43.15,
+   "prispevki": 15.29,
+   "trosarina": 1.41,
+   "nadomestilo": 1.97,
+   "bloki": {
+    "2": 139,
+    "3": 585,
+    "4": 191,
+    "5": 5
+   }
+  }
+ },
+ "izracuni": {
+  "2026-07": {
+   "mesec": "2026-07",
+   "kwh": 495.25,
+   "bloki": {
+    "2": 79.17,
+    "3": 290.73,
+    "4": 125.17,
+    "5": 0.18
+   },
+   "moc": {
+    "2": 8.7,
+    "3": 18.6,
+    "4": 18.6,
+    "5": 18.6
+   },
+   "postavke": {
+    "energija": 14.46,
+    "moc2": 9.5,
+    "moc3": 5.38,
+    "moc4": 0.45,
+    "moc5": 0.05,
+    "ee2": 1.58,
+    "ee3": 5,
+    "ee4": 2.26,
+    "ee5": 0,
+    "opTrga": 0.06,
+    "ucink": 0.4,
+    "spte": 6.75,
+    "tros": 0.76,
+    "nadom": 2.97,
+    "eko": -1
+   },
+   "osnova": 48.62,
+   "ddv": 10.7,
+   "skupaj": 59.32,
+   "napoved": null,
+   "pokrito": 1,
+   "manjkaCen": 0,
+   "oznaka": "konec",
+   "stMeritev": 2976,
+   "posodobljeno": "2026-09-30T20:56:40.324Z"
+  },
+  "2026-08": {
+   "mesec": "2026-08",
+   "kwh": 920.02,
+   "bloki": {
+    "2": 139.5,
+    "3": 585.42,
+    "4": 191.13,
+    "5": 3.97
+   },
+   "moc": {
+    "2": 18.6,
+    "3": 20.6,
+    "4": 20.6,
+    "5": 20.6
+   },
+   "postavke": {
+    "energija": 36.18,
+    "moc2": 20.32,
+    "moc3": 5.95,
+    "moc4": 0.5,
+    "moc5": 0.05,
+    "ee2": 2.78,
+    "ee3": 10.04,
+    "ee4": 3.45,
+    "ee5": 0.06,
+    "opTrga": 0.12,
+    "ucink": 0.74,
+    "spte": 14.43,
+    "tros": 1.41,
+    "nadom": 2.97,
+    "eko": -1
+   },
+   "osnova": 98,
+   "ddv": 21.56,
+   "skupaj": 119.56,
+   "napoved": null,
+   "pokrito": 1,
+   "manjkaCen": 0,
+   "oznaka": "konec",
+   "stMeritev": 2976,
+   "posodobljeno": "2026-09-30T20:56:40.601Z"
+  },
+  "2026-09": {
+   "mesec": "2026-09",
+   "kwh": 866.53,
+   "bloki": {
+    "2": 97.93,
+    "3": 583.33,
+    "4": 184.95,
+    "5": 0.33
+   },
+   "moc": {
+    "2": 17,
+    "3": 18.8,
+    "4": 18.8,
+    "5": 18.8
+   },
+   "postavke": {
+    "energija": 39.69,
+    "moc2": 18.57,
+    "moc3": 5.43,
+    "moc4": 0.46,
+    "moc5": 0.05,
+    "ee2": 1.96,
+    "ee3": 10.01,
+    "ee4": 3.34,
+    "ee5": 0.01,
+    "opTrga": 0.11,
+    "ucink": 0.69,
+    "spte": 13.19,
+    "tros": 1.33,
+    "nadom": 2.97,
+    "eko": -1
+   },
+   "osnova": 96.81,
+   "ddv": 21.3,
+   "skupaj": 118.11,
+   "napoved": {
+    "osnova": 98.78,
+    "ddv": 21.73,
+    "skupaj": 120.51,
+    "kwh": 896
+   },
+   "pokrito": 0.967,
+   "manjkaCen": 0,
+   "oznaka": "konec",
+   "stMeritev": 2784,
+   "posodobljeno": "2026-09-30T20:56:40.880Z"
+  }
+ },
+ "oznakaZamik": 900000,
+ "posodobljeno": "2026-09-30T20:56:40.880Z"
+}

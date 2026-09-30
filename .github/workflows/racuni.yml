@@ -1,0 +1,47 @@
+name: Posodobi račune
+
+# Merilni podatki v Moj Elektro zamujajo približno en dan, zato zadošča dvakrat na dan.
+on:
+  schedule:
+    - cron: "20 5 * * *"    # ~7:20 poletni / 6:20 zimski čas
+    - cron: "20 15 * * *"   # ~17:20 poletni / 16:20 zimski čas
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: racuni
+  cancel-in-progress: false
+
+jobs:
+  racuni:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Izračunaj račune
+        env:
+          MOJELEKTRO_TOKEN: ${{ secrets.MOJELEKTRO_TOKEN }}
+        run: node fetch-racun.js
+
+      - name: Shrani, če so nove
+        env:
+          MOJELEKTRO_TOKEN: ${{ secrets.MOJELEKTRO_TOKEN }}
+        run: |
+          BR="${{ github.ref_name }}"
+          git config user.name "racuni-bot"
+          git config user.email "actions@github.com"
+          for i in 1 2 3; do
+            if [ -z "$(git status --porcelain racuni.json)" ]; then echo "Ni sprememb."; exit 0; fi
+            git add racuni.json
+            git commit -q -m "racuni: $(date -u +%Y-%m-%d\ %H:%M) UTC"
+            if git push origin HEAD:"$BR"; then echo "Shranjeno."; exit 0; fi
+            echo "Potisk zavrnjen (poskus $i). Poravnavam z daljavo in računam znova."
+            git reset --hard -q HEAD~1
+            git fetch -q origin "$BR"
+            git reset --hard -q "origin/$BR"
+            node fetch-racun.js
+            sleep 3
+          done
+          echo "Potisk ni uspel."; exit 1

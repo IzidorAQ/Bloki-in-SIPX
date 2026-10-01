@@ -207,7 +207,8 @@ function izracunaj(y, m, energy15, power15, prices, shift){
     bloki:Object.fromEntries(order.map(b=>[b,+blkKwh[b].toFixed(2)])),
     moc:Object.fromEntries(order.map(b=>[b,+P[b].toFixed(2)])),
     postavke:L, osnova, ddv, skupaj:r2(osnova+ddv), napoved, pokrito:+pokrito.toFixed(3),
-    manjkaCen:missingPrice, oznaka:endLabel?"konec":"zacetek", stMeritev };
+    manjkaCen:missingPrice, oznaka:endLabel?"konec":"zacetek", stMeritev,
+    izmerjenoDo: (() => { const d = ljParts(lastTs - shift); return `${d.getDate()}. ${d.getMonth()+1}.`; })() };
 }
 
 (async () => {

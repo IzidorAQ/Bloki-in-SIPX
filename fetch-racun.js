@@ -158,10 +158,11 @@ function izracunaj(y, m, energy15, power15, prices, shift){
     hourKwh.set(h, (hourKwh.get(h)||0) + v); kwh += v;
     blkKwh[blockAt(ljParts(start))] += v; lastTs = Math.max(lastTs, t);
   });
+  const peakTs = {};
   power15.forEach((v, t) => {
     const start = t - shift;
     if (start < from || start >= to) return;
-    const b = blockAt(ljParts(start)); if (v > peak[b]) peak[b] = v;
+    const b = blockAt(ljParts(start)); if (v > peak[b]){ peak[b] = v; peakTs[b] = start; }
   });
   // obračunska moč: največja 15-min moč v bloku, nato naraščajoče po blokih (P2<=P3<=P4<=P5)
   const blocks = Object.keys(peak).map(Number).filter(b => blkKwh[b]>0 || peak[b]>0 || b>=2);
@@ -169,8 +170,16 @@ function izracunaj(y, m, energy15, power15, prices, shift){
   const order = winter ? [1,2,3,4,5] : [2,3,4,5];
   // Obračunska moč = vrh ISTEGA meseca v bloku, zaokrožen na 0,1 kW, in ne nižji od bloka pred njim.
   // Potrjeno na 15-min podatkih: julij 8,7/18,6/18,6/18,6 in avgust 18,6/20,6/20,6/20,6 se ujemata z računoma.
-  const P = {}; let prev = 0;
-  order.forEach(b => { P[b] = Math.max(Math.round(peak[b]*10)/10, prev); prev = P[b]; });
+  const P = {}, izvor = {}; let prev = 0, prevB = null;
+  order.forEach(b => {
+    const lasten = Math.round(peak[b]*10)/10;
+    if (lasten >= prev){ P[b] = lasten; izvor[b] = b; } else { P[b] = prev; izvor[b] = izvor[prevB]; }
+    prev = P[b]; prevB = b;
+  });
+  const fmt = ms => { const d = ljParts(ms);
+    return `${d.getDate()}. ${d.getMonth()+1}. ob ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; };
+  const vrh = {}; order.forEach(b => { vrh[b] = { lasten:+(Math.round(peak[b]*100)/100), izvor:izvor[b],
+                                              ob: peakTs[izvor[b]] != null ? fmt(peakTs[izvor[b]]) : null }; });
   let energija = 0;
   // Dobavitelj meritve distributerja preračuna na celo število kWh z računa (npr. 495,25 -> 495)
   // in šele nato obračuna po urah. Potrjeno na julijski specifikaciji.
@@ -205,7 +214,7 @@ function izracunaj(y, m, energy15, power15, prices, shift){
   }
   return { mesec:`${y}-${String(m+1).padStart(2,"0")}`, kwh:+kwh.toFixed(2),
     bloki:Object.fromEntries(order.map(b=>[b,+blkKwh[b].toFixed(2)])),
-    moc:Object.fromEntries(order.map(b=>[b,+P[b].toFixed(2)])),
+    moc:Object.fromEntries(order.map(b=>[b,+P[b].toFixed(2)])), vrh, b1: b1Mult(new Date(y, m, 15)),
     postavke:L, osnova, ddv, skupaj:r2(osnova+ddv), napoved, pokrito:+pokrito.toFixed(3),
     manjkaCen:missingPrice, oznaka:endLabel?"konec":"zacetek", stMeritev,
     izmerjenoDo: (() => { const d = ljParts(lastTs - shift); return `${d.getDate()}. ${d.getMonth()+1}.`; })() };
@@ -220,13 +229,14 @@ function izracunaj(y, m, energy15, power15, prices, shift){
   // Dejanski računi (iz PDF-jev). Služijo za zgodovino in za preverjanje izračuna.
   Object.assign(store.racuni, {
     "2026-06": { racun:"IR32708612", obdobje:"18.6.-30.6.", kwh:102, osnova:16.78, ddv:3.69, skupaj:20.47,
-                 energija:8.84, omreznina:5.37, prispevki:1.56, trosarina:0.16, nadomestilo:0.85 },
+                 energija:8.84, omreznina:5.37, prispevki:1.56, trosarina:0.16, nadomestilo:0.85,
+                 moc:{2:1.9,3:4.8,4:4.8,5:4.8}, opomba:"mesec priklopa: obračunana minimalna moč" },
     "2026-07": { racun:"IR33027039", obdobje:"1.7.-31.7.", kwh:495, osnova:48.62, ddv:10.70, skupaj:59.32,
                  energija:14.46, omreznina:24.22, prispevki:7.21, trosarina:0.76, nadomestilo:1.97,
-                 bloki:{2:79,3:291,4:125,5:0} },
+                 bloki:{2:79,3:291,4:125,5:0}, moc:{2:8.7,3:18.6,4:18.6,5:18.6} },
     "2026-08": { racun:"IR33344376", obdobje:"1.8.-31.8.", kwh:920, osnova:98.00, ddv:21.56, skupaj:119.56,
                  energija:36.18, omreznina:43.15, prispevki:15.29, trosarina:1.41, nadomestilo:1.97,
-                 bloki:{2:139,3:585,4:191,5:5} },
+                 bloki:{2:139,3:585,4:191,5:5}, moc:{2:18.6,3:20.6,4:20.6,5:20.6} },
   });
 
   // izračunamo tekoči mesec in prejšnjega (podatki v Moj Elektro zamujajo ~1 dan)

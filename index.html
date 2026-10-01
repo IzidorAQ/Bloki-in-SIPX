@@ -247,6 +247,7 @@
   @media(max-width:560px){
     .evlist .shead,.evlist .srow{grid-template-columns:minmax(0,0.8fr) minmax(0,0.95fr) minmax(0,0.85fr) minmax(0,0.9fr)}
   }
+  .evdot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:middle}
 </style>
 </head>
 <body>
@@ -401,7 +402,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-01 11:21</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-01 11:53</span>
     </div>
 
   </div>
@@ -2405,6 +2406,44 @@ addEventListener("resize",()=>{ clearTimeout(rsTo); rsTo=setTimeout(()=>{ if(SIP
 // Cene 2026 brez DDV iz računa za avgust 2026: energija 0,1299, omrežnina ET 0,01864,
 // operater trga 0,00013, energetska učinkovitost 0,0008, trošarina 0,00153 -> 0,151 EUR/kWh.
 const SAMOOSKRBA_KWH = (0.1299+0.01864+0.00013+0.0008+0.00153)*1.22;   // 0,18422 EUR/kWh z DDV
+const SPTE_KW = 0.77562;   // prispevek SPTE in OVE, EUR/kW obračunske moči najnižjega bloka (brez DDV)
+// Podrobnosti o obračunski moči za mesec: moč po blokih, kdaj je bil vrh dosežen, cena in znesek,
+// skupaj s prispevkom SPTE in OVE, ki se obračuna po moči najnižjega bloka.
+function mocPodrobno(k, a, c){
+  const moc=(c&&c.moc)||(a&&a.moc); if(!moc) return '<div class="note">Za ta mesec podatkov o moči ni.</div>';
+  const order=Object.keys(moc).map(Number).sort((x,y)=>x-y);
+  const b1=(c&&c.b1)||1, r2=x=>Math.round((x+1e-12)*100)/100;
+  const f=(v,d=2)=>v.toFixed(d).replace(".",",");
+  let vrst="", sum=0;
+  order.forEach(b=>{
+    const cena=TARIFF[b].moc*(b===1?b1:1);
+    const zn=(c&&c.postavke&&c.postavke["moc"+b]!=null)?c.postavke["moc"+b]:r2(moc[b]*cena);
+    sum+=zn;
+    const v=c&&c.vrh&&c.vrh[b];
+    let kdaj="-";
+    if(v){ kdaj = v.izvor===b ? (v.ob||"-")
+         : `dvignjeno na blok ${v.izvor}<br><span style="color:var(--faint);font-size:11px">lasten vrh ${f(v.lasten,1)} kW</span>`; }
+    vrst+=`<tr><td><span class="evdot" style="background:${COL[b]}"></span> blok ${b}</td>`+
+      `<td style="text-align:right"><b>${f(moc[b],1)} kW</b></td><td style="font-size:12px">${kdaj}</td>`+
+      `<td style="text-align:right;font-size:12px">${f(cena,5)}</td><td style="text-align:right">${f(zn)} €</td></tr>`;
+  });
+  const najB=order[0];
+  const spte=(c&&c.postavke&&c.postavke.spte!=null)?c.postavke.spte:r2(moc[najB]*SPTE_KW);
+  const vse=r2(sum+spte), ddv=r2(vse*0.22);
+  const skupajMes = c ? c.osnova : (a ? a.osnova : null);
+  const delez = skupajMes ? Math.round(vse/skupajMes*100) : null;
+  const zima = order.includes(1);
+  return `<table class="evtable" style="margin:6px 0"><tr><th>blok</th><th>obr. moč</th><th>vrh dosežen</th><th>EUR/kW</th><th>znesek</th></tr>`+
+    vrst+`<tr><td colspan="4">prispevek SPTE in OVE<br><span style="color:var(--faint);font-size:11px">${f(moc[najB],1)} kW (blok ${najB}) &times; ${f(SPTE_KW,5)}</span></td>`+
+    `<td style="text-align:right">${f(spte)} €</td></tr>`+
+    `<tr class="sum"><td colspan="4">vezano na moč, brez DDV<br><span style="color:var(--faint);font-size:11px">z DDV ${f(r2(vse+ddv))} €${delez!=null?`, to je ${delez} % osnove računa`:``}</span></td>`+
+    `<td style="text-align:right">${f(vse)} €</td></tr></table>`+
+    `<div class="note">Obračunska moč je največja 15-minutna moč v bloku v mesecu, zaokrožena na 0,1 kW, in ne nižja od bloka pred njim. `+
+    `Prispevek SPTE in OVE se plača po moči najnižjega bloka, zato je vrh v bloku ${najB} dvakrat drag.`+
+    (a&&a.opomba?` <b>${a.opomba}.</b>`:``)+
+    (zima?` Pozimi je blok 1 obračunan s popustom (${Math.round(b1*100)} % cene); da se SPTE takrat obračuna po bloku 1, je domneva, na računu še ni preverjena.`:``)+
+    `</div>`;
+}
 const MESECI=["januar","februar","marec","april","maj","junij","julij","avgust","september","oktober","november","december"];
 async function loadRacuni(){
   const box=document.getElementById("racuniBox"); if(!box) return;
@@ -2438,17 +2477,19 @@ async function loadRacuni(){
     const pri = (sam!=null && znesek!=null) ? sam-znesek : null;
     if(pri!=null && a){ prihranek+=pri; placanoSam+=sam; }
     const cKwh = (kwh && znesek!=null) ? (znesek/kwh*100).toFixed(1).replace(".",",")+" c/kWh" : "";
-    rows+=`<tr><td>${MESECI[M-1]} ${Y}<br><span style="color:var(--faint);font-size:11px">${vir}</span></td>`+
+    rows+=`<tr style="cursor:pointer" onclick="const r=document.getElementById('moc-${k}');r.style.display=r.style.display==='none'?'':'none'">`+
+          `<td>${MESECI[M-1]} ${Y} <span style="color:var(--faint)">&#9662;</span><br><span style="color:var(--faint);font-size:11px">${vir}</span></td>`+
           `<td style="text-align:right">${kwh!=null?kwh+" kWh":"-"}</td>`+
           `<td style="text-align:right;color:${barva}"><b>${eur(znesek)}</b><br><span style="color:var(--faint);font-size:11px">${cKwh}</span></td>`+
           `<td style="text-align:right">${eur(sam)}</td>`+
           `<td style="text-align:right;color:${pri==null?"inherit":(pri>=0?"var(--energy)":"var(--b2)")}"><b>${pri==null?"-":(pri>=0?"+":"")+pri.toFixed(2).replace(".",",")+" €"}</b></td></tr>`+
-          (opomba?`<tr><td colspan="5" style="color:var(--faint);font-size:11px;padding-top:0">${opomba}</td></tr>`:``);
+          (opomba?`<tr><td colspan="5" style="color:var(--faint);font-size:11px;padding-top:0">${opomba}</td></tr>`:``)+
+          `<tr id="moc-${k}" style="display:none"><td colspan="5" style="padding:4px 0 12px">${mocPodrobno(k,a,c)}</td></tr>`;
   });
   box.innerHTML=`<div class="evtable-wrap"><table class="evtable"><tr><th>mesec</th><th>poraba</th><th>ta priključek</th><th>na samooskrbi</th><th>prihranek</th></tr>`+
     rows+`<tr class="sum"><td>skupaj (računi)</td><td></td><td style="text-align:right">${eur(placano)}</td><td style="text-align:right">${eur(placanoSam)}</td>`+
     `<td style="text-align:right;color:${prihranek>=0?"var(--energy)":"var(--b2)"}">${(prihranek>=0?"+":"")+prihranek.toFixed(2).replace(".",",")} €</td></tr></table></div>`+
-    `<div class="note" style="margin-top:8px">Prihranek pove, koliko manj si plačal, ker ta priključek imaš, kot bi plačal, če bi iste kWh porabil na priključku s samooskrbo, `+
+    `<div class="note" style="margin-top:8px">S klikom na mesec vidiš obračunske moči po blokih, kdaj je bil vrh dosežen in koliko stane. Prihranek pove, koliko manj si plačal, ker ta priključek imaš, kot bi plačal, če bi iste kWh porabil na priključku s samooskrbo, `+
     `tega pa ne bi imel. Pri tekočem mesecu velja do zadnjega izmerjenega dne: mesečni fiksni stroški so že všteti v celoti, zato je prihranek na začetku meseca negativen in raste s polnjenjem; pade lahko le, če polniš dražje od samooskrbe ali dosežeš nov vrh moči. `+
     `Tukaj je upoštevan celoten račun z vsemi fiksnimi stroški, na samooskrbi pa ${(SAMOOSKRBA_KWH*100).toFixed(2).replace(".",",")} c/kWh z DDV `+
     `(energija 12,99 + omrežnina 1,864 + prispevki 0,093 + trošarina 0,153 c, brez DDV), ker elektrarna nima presežka. Obračunska moč tam ni všteta.</div>`;

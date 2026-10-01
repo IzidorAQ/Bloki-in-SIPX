@@ -93,7 +93,8 @@
    "manjkaCen": 0,
    "oznaka": "konec",
    "stMeritev": 2976,
-   "posodobljeno": "2026-10-01T09:45:49.795Z"
+   "izmerjenoDo": "31. 7.",
+   "posodobljeno": "2026-10-01T11:39:58.171Z"
   },
   "2026-08": {
    "mesec": "2026-08",
@@ -135,7 +136,8 @@
    "manjkaCen": 0,
    "oznaka": "konec",
    "stMeritev": 2976,
-   "posodobljeno": "2026-10-01T09:45:50.192Z"
+   "izmerjenoDo": "31. 8.",
+   "posodobljeno": "2026-10-01T11:39:58.553Z"
   },
   "2026-09": {
    "mesec": "2026-09",
@@ -177,9 +179,10 @@
    "manjkaCen": 0,
    "oznaka": "konec",
    "stMeritev": 2880,
-   "posodobljeno": "2026-10-01T09:45:50.577Z"
+   "izmerjenoDo": "30. 9.",
+   "posodobljeno": "2026-10-01T11:39:58.926Z"
   }
  },
  "oznakaZamik": 900000,
- "posodobljeno": "2026-10-01T09:45:50.578Z"
+ "posodobljeno": "2026-10-01T11:39:58.926Z"
 }

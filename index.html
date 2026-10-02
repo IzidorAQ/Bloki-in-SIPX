@@ -402,7 +402,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-02 09:09</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-02 16:28</span>
     </div>
 
   </div>
@@ -2452,10 +2452,9 @@ async function loadRacuni(){
   const d=r.data, rac=d.racuni||{}, izr=d.izracuni||{};
   const eur=v=>v==null?"-":v.toFixed(2).replace(".",",")+" €";
   const keys=[...new Set([...Object.keys(rac),...Object.keys(izr)])].sort().reverse();
-  let placano=0, rows="", prihranek=0, placanoSam=0;
+  let placano=0, rows="", prihranek=0, placanoSam=0, sumKwh=0;
   keys.forEach(k=>{
     const [Y,M]=k.split("-").map(Number), a=rac[k], c=izr[k];
-    if(a) placano+=a.skupaj;
     let znesek, vir, opomba="";
     if(a){ znesek=a.skupaj; vir="račun";
       if(c) { const df=c.skupaj-a.skupaj; opomba=`izračun ${eur(c.skupaj)}${Math.abs(df)>=0.005?` (${df>0?"+":""}${df.toFixed(2).replace(".",",")})`:" (natančno)"}`; } }
@@ -2475,7 +2474,11 @@ async function loadRacuni(){
     const barva = (vir==="račun"||vir==="izračun") ? "var(--ink)" : "var(--energy)";
     const sam = kwh!=null ? kwh*SAMOOSKRBA_KWH : null;
     const pri = (sam!=null && znesek!=null) ? sam-znesek : null;
-    if(pri!=null && a){ prihranek+=pri; placanoSam+=sam; }
+    // SKUPAJ sešteje VSE mesece, kot so prikazani v vrsticah (računi, izračuni in tekoči mesec do zdaj)
+    if(znesek!=null) placano+=znesek;
+    if(kwh!=null) sumKwh+=kwh;
+    if(sam!=null) placanoSam+=sam;
+    if(pri!=null) prihranek+=pri;
     const cKwh = (kwh && znesek!=null) ? (znesek/kwh*100).toFixed(1).replace(".",",")+" c/kWh" : "";
     rows+=`<tr style="cursor:pointer" onclick="const r=document.getElementById('moc-${k}');r.style.display=r.style.display==='none'?'':'none'">`+
           `<td>${MESECI[M-1]} ${Y} <span style="color:var(--faint)">&#9662;</span><br><span style="color:var(--faint);font-size:11px">${vir}</span></td>`+
@@ -2487,7 +2490,7 @@ async function loadRacuni(){
           `<tr id="moc-${k}" style="display:none"><td colspan="5" style="padding:4px 0 12px">${mocPodrobno(k,a,c)}</td></tr>`;
   });
   box.innerHTML=`<div class="evtable-wrap"><table class="evtable"><tr><th>mesec</th><th>poraba</th><th>ta priključek</th><th>na samooskrbi</th><th>prihranek</th></tr>`+
-    rows+`<tr class="sum"><td>skupaj (računi)</td><td></td><td style="text-align:right">${eur(placano)}</td><td style="text-align:right">${eur(placanoSam)}</td>`+
+    rows+`<tr class="sum"><td>skupaj</td><td style="text-align:right">${Math.round(sumKwh)} kWh</td><td style="text-align:right">${eur(placano)}<br><span style="color:var(--faint);font-size:11px">${sumKwh?(placano/sumKwh*100).toFixed(1).replace(".",","):"-"} c/kWh</span></td><td style="text-align:right">${eur(placanoSam)}</td>`+
     `<td style="text-align:right;color:${prihranek>=0?"var(--energy)":"var(--b2)"}">${(prihranek>=0?"+":"")+prihranek.toFixed(2).replace(".",",")} €</td></tr></table></div>`+
     `<div class="note" style="margin-top:8px">S klikom na mesec vidiš obračunske moči po blokih, kdaj je bil vrh dosežen in koliko stane. Prihranek pove, koliko manj si plačal, ker ta priključek imaš, kot bi plačal, če bi iste kWh porabil na priključku s samooskrbo, `+
     `tega pa ne bi imel. Pri tekočem mesecu velja do zadnjega izmerjenega dne: mesečni fiksni stroški so že všteti v celoti, zato je prihranek na začetku meseca negativen in raste s polnjenjem; pade lahko le, če polniš dražje od samooskrbe ali dosežeš nov vrh moči. `+

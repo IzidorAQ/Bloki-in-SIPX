@@ -136,7 +136,7 @@
    "oznaka": "konec",
    "stMeritev": 2976,
    "izmerjenoDo": "31. 7.",
-   "posodobljeno": "2026-10-02T02:47:05.702Z"
+   "posodobljeno": "2026-10-02T08:57:45.140Z"
   },
   "2026-08": {
    "mesec": "2026-08",
@@ -202,7 +202,7 @@
    "oznaka": "konec",
    "stMeritev": 2976,
    "izmerjenoDo": "31. 8.",
-   "posodobljeno": "2026-10-02T02:47:06.087Z"
+   "posodobljeno": "2026-10-02T08:57:45.529Z"
   },
   "2026-09": {
    "mesec": "2026-09",
@@ -268,9 +268,80 @@
    "oznaka": "konec",
    "stMeritev": 2880,
    "izmerjenoDo": "30. 9.",
-   "posodobljeno": "2026-10-02T02:47:06.460Z"
+   "posodobljeno": "2026-10-02T08:57:45.896Z"
+  },
+  "2026-10": {
+   "mesec": "2026-10",
+   "kwh": 5.25,
+   "bloki": {
+    "2": 3.43,
+    "3": 1.79,
+    "4": 0.03,
+    "5": 0
+   },
+   "moc": {
+    "2": 1,
+    "3": 2.4,
+    "4": 2.4,
+    "5": 2.4
+   },
+   "vrh": {
+    "2": {
+     "lasten": 1.05,
+     "izvor": 2,
+     "ob": "1. 10. ob 12:00"
+    },
+    "3": {
+     "lasten": 2.37,
+     "izvor": 3,
+     "ob": "1. 10. ob 14:15"
+    },
+    "4": {
+     "lasten": 0,
+     "izvor": 3,
+     "ob": "1. 10. ob 14:15"
+    },
+    "5": {
+     "lasten": 0,
+     "izvor": 3,
+     "ob": "1. 10. ob 14:15"
+    }
+   },
+   "b1": 0.5,
+   "postavke": {
+    "energija": 0.28,
+    "moc2": 1.09,
+    "moc3": 0.69,
+    "moc4": 0.06,
+    "moc5": 0.01,
+    "ee2": 0.06,
+    "ee3": 0.03,
+    "ee4": 0,
+    "ee5": 0,
+    "opTrga": 0,
+    "ucink": 0,
+    "spte": 0.78,
+    "tros": 0.01,
+    "nadom": 2.97,
+    "eko": -1
+   },
+   "osnova": 4.98,
+   "ddv": 1.1,
+   "skupaj": 6.08,
+   "napoved": {
+    "osnova": 16.4,
+    "ddv": 3.61,
+    "skupaj": 20.01,
+    "kwh": 163
+   },
+   "pokrito": 0.032,
+   "manjkaCen": 0,
+   "oznaka": "konec",
+   "stMeritev": 96,
+   "izmerjenoDo": "1. 10.",
+   "posodobljeno": "2026-10-02T08:57:45.908Z"
   }
  },
  "oznakaZamik": 900000,
- "posodobljeno": "2026-10-02T02:47:06.461Z"
+ "posodobljeno": "2026-10-02T08:57:45.908Z"
 }

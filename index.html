@@ -402,7 +402,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-01 11:53</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-02 09:09</span>
     </div>
 
   </div>
@@ -2493,6 +2493,27 @@ async function loadRacuni(){
     `tega pa ne bi imel. Pri tekočem mesecu velja do zadnjega izmerjenega dne: mesečni fiksni stroški so že všteti v celoti, zato je prihranek na začetku meseca negativen in raste s polnjenjem; pade lahko le, če polniš dražje od samooskrbe ali dosežeš nov vrh moči. `+
     `Tukaj je upoštevan celoten račun z vsemi fiksnimi stroški, na samooskrbi pa ${(SAMOOSKRBA_KWH*100).toFixed(2).replace(".",",")} c/kWh z DDV `+
     `(energija 12,99 + omrežnina 1,864 + prispevki 0,093 + trošarina 0,153 c, brez DDV), ker elektrarna nima presežka. Obračunska moč tam ni všteta.</div>`;
+  // KDAJ DISTRIBUTER OBJAVI PODATKE: iz dnevnih zapisov "še ni bilo" in "prvič na voljo"
+  const dz=d.dostopnost||{}, dni=Object.keys(dz).sort();
+  const lt=iso=>{ const t=new Date(new Date(iso).toLocaleString("en-US",{timeZone:"Europe/Ljubljana"}));
+    return {h:t.getHours(), m:t.getMinutes(), txt:`${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`,
+            dan:`${t.getDate()}. ${t.getMonth()+1}.`}; };
+  if(dni.length){
+    const zad=dni[dni.length-1], z=dz[zad], [Y,M,D]=zad.split("-").map(Number);
+    let vrstica;
+    if(z.naVoljo){
+      const na=lt(z.naVoljo);
+      vrstica = z.niBilo ? `Podatki za ${D}. ${M}. so bili objavljeni med ${lt(z.niBilo).txt} in ${na.txt}${na.dan!==`${D+1}. ${M}.`?` (${na.dan})`:``}.`
+                         : `Podatki za ${D}. ${M}. so bili na voljo že ob prvi preverbi, ${na.dan} ob ${na.txt}.`;
+    } else vrstica = `Podatkov za ${D}. ${M}. še ni (zadnja preverba ob ${lt(z.niBilo).txt}, ${z.delno||0}/96 četrtur).`;
+    // obicajna ura: mediana dni, kjer poznamo okno (bilo je zabelezeno, da jih se ni bilo)
+    const okna=dni.filter(k=>dz[k].naVoljo&&dz[k].niBilo).map(k=>{ const t=lt(dz[k].naVoljo); return t.h*60+t.m; }).sort((a,b)=>a-b);
+    let obicajno="";
+    if(okna.length>=3){ const med=okna[Math.floor(okna.length/2)];
+      obicajno=` Običajno so na voljo do ${String(Math.floor(med/60)).padStart(2,"0")}:${String(med%60).padStart(2,"0")} (mediana ${okna.length} dni).`; }
+    else obicajno=` Običajna ura objave bo znana po nekaj dneh beleženja.`;
+    box.insertAdjacentHTML("beforeend",`<div class="note" style="margin-top:6px">${vrstica}${obicajno} Opravilo preverja vsako uro in račune osveži takoj, ko so podatki popolni.</div>`);
+  }
   const up=Date.parse(d.posodobljeno||"");
   if(!isNaN(up)){ const t=new Date(new Date(up).toLocaleString("en-US",{timeZone:"Europe/Ljubljana"}));
     document.getElementById("racuniUpd").textContent=` · osveženo ${t.getDate()}.${t.getMonth()+1}. ob ${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`; }

@@ -241,6 +241,38 @@ function izracunaj(y, m, energy15, power15, prices, shift){
 
   // izračunamo tekoči mesec in prejšnjega (podatki v Moj Elektro zamujajo ~1 dan)
   const now = ljParts(Date.now());
+
+  // ---- KDAJ SO PODATKI ZA VČERAJ NA VOLJO? ----
+  // Poceni preverba enega dneva. Zabeležimo zadnji čas, ko jih še ni bilo, in prvi čas, ko so bili
+  // popolni. Iz tega se v nekaj dneh vidi, ob kateri uri distributer objavi podatke.
+  const yS = ljMidnight(now.getFullYear(), now.getMonth(), now.getDate()-1);
+  const yE = ljMidnight(now.getFullYear(), now.getMonth(), now.getDate());
+  const yKey = (() => { const d = ljParts(yS); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })();
+  const shiftP = store.oznakaZamik != null ? store.oznakaZamik : 9e5;
+  const probe = await mojElektro(RT_ENERGY, yS, yE, log);
+  let nProbe = 0; probe.forEach((v, t) => { const st = t - shiftP; if (st >= yS && st < yE) nProbe++; });
+  const nExp = Math.round((yE - yS) / 9e5);           // 96, ob prehodu na poletni/zimski čas 92 ali 100
+  const popoln = nProbe >= nExp;
+  store.dostopnost = store.dostopnost || {};
+  const zd = store.dostopnost[yKey] = store.dostopnost[yKey] || {};
+  const zdaj = new Date(Date.now()).toISOString();
+  if (popoln){ if (!zd.naVoljo) zd.naVoljo = zdaj; }
+  else { zd.niBilo = zdaj; zd.delno = nProbe; }
+  // obdržimo zadnjih 45 dni
+  Object.keys(store.dostopnost).sort().slice(0, -45).forEach(k => delete store.dostopnost[k]);
+  log.push(`podatki za ${yKey}: ${nProbe}/${nExp} četrtur ${popoln ? "- popolni" : "- še niso popolni"}`);
+
+  // Če je bil včerajšnji dan že obdelan, novega ni: končamo brez klicev in brez zapisa.
+  if (popoln && store.zadnjiDan === yKey && zd.naVoljo !== zdaj){
+    log.push("včerajšnji dan je že obdelan, ni sprememb");
+    log.forEach(l => console.log("  " + l)); return;
+  }
+  if (!popoln){
+    // zapišemo le čas preverbe (za ugotavljanje ure objave), izračuna pa ne poganjamo
+    store.posodobljeno = store.posodobljeno || zdaj;
+    fs.writeFileSync(OUT, JSON.stringify(store, null, 1));
+    log.forEach(l => console.log("  " + l)); return;
+  }
   const months = [];
   // od julija 2026: junij (mesec priklopa) je bil obračunan z minimalno močjo, ne z izmerjeno
   for (let d = new Date(2026, 6, 1); d <= now; d = new Date(d.getFullYear(), d.getMonth()+1, 1))
@@ -254,7 +286,7 @@ function izracunaj(y, m, energy15, power15, prices, shift){
     const old = store.izracuni[key];
     // zaključen mesec s popolnimi podatki ostane, tekoči in prejšnji se vedno osvežita,
     // meseci z računom pa se vedno preberejo, ker služijo za določitev oznake intervala
-    if (old && old.pokrito >= 0.999 && key !== curKey && key !== prevKey && !store.racuni[key]) continue;
+    if (old && old.pokrito >= 0.999 && key !== curKey && key !== prevKey && (store.oznakaZamik != null || !store.racuni[key])) continue;
     const from = ljMidnight(y, m, 1), to = Math.min(ljMidnight(y, m+1, 1), Date.now());
     const [en, pw, pr] = await Promise.all([
       mojElektro(RT_ENERGY, from, to, log), mojElektro(RT_POWER, from, to, log), sipx(from, to, log) ]);
@@ -285,6 +317,7 @@ function izracunaj(y, m, energy15, power15, prices, shift){
       (rac ? ` | RAČUN ${rac.skupaj} EUR, razlika ${(res.skupaj-rac.skupaj).toFixed(2)} EUR` : ` (pokrito ${(res.pokrito*100).toFixed(0)} %)`)+
       ` | moč ${JSON.stringify(res.moc)}`);
   }
+  store.zadnjiDan = yKey;
   store.posodobljeno = new Date().toISOString();
   fs.writeFileSync(OUT, JSON.stringify(store, null, 1));
   log.forEach(l => console.log("  " + l));

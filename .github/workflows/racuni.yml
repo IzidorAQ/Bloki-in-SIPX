@@ -1,10 +1,12 @@
 name: Posodobi račune
 
-# Merilni podatki v Moj Elektro zamujajo približno en dan, zato zadošča dvakrat na dan.
+# Vsako uro preveri, ali so podatki za včeraj že objavljeni v Moj Elektro. Preverba je en sam klic;
+# če podatkov še ni ali so že obdelani, opravilo ne naredi ničesar. Ko se pojavijo, izračuna račune.
+# Hkrati beleži, ob kateri uri distributer objavlja podatke (vidno na strani pri računih).
+# Minuta 17 namesto 0, ker GitHub zagone ob polni uri pogosto zamakne.
 on:
   schedule:
-    - cron: "20 5 * * *"    # ~7:20 poletni / 6:20 zimski čas
-    - cron: "20 15 * * *"   # ~17:20 poletni / 16:20 zimski čas
+    - cron: "17 * * * *"
   workflow_dispatch:
 
 permissions:

@@ -381,7 +381,7 @@
       </div>
       <div class="row" id="evLimRow" style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"></div>
       <details id="splDet" style="margin-top:10px">
-        <summary style="cursor:pointer;font-size:14px;color:var(--mut)">Ali se splača dvigniti obračunsko moč? (drsnika)</summary>
+        <summary style="cursor:pointer;font-size:14px;color:var(--mut)">Ali se splača dvigniti obračunsko moč?</summary>
         <div id="splBox" style="margin-top:8px"></div>
       </details>
       <div class="row" style="margin-top:8px;display:flex;align-items:center;gap:8px">
@@ -407,7 +407,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-03 13:17</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-03 14:35</span>
     </div>
 
   </div>
@@ -1126,6 +1126,7 @@ function stopWave(done){
   if(done){ document.querySelectorAll("#sipxList .srow").forEach(restoreRow); drawSipxView(); }
 }
 function renderSIPX(){
+  try{ renderSplacilo(); }catch(e){}
   const chart=document.getElementById("sipxChart"), stats=document.getElementById("sipxStats");
   if(!SIPXVIEW.length){ chart.innerHTML='<div class="err">Cene niso naložene. '+
     '<button class="tab" style="padding:4px 10px;margin-left:6px" onclick="loadSIPX()">poskusi znova</button> '+
@@ -2187,47 +2188,51 @@ function renderEvLim(){
     `<div style="width:100%;font-size:12px;color:var(--faint)">Moč v dragem bloku se plača za cel mesec po najvišji četrturi. Tukaj se odločiš, koliko je ta mesec sprejmeš; `+
     `prazno pomeni le že doseženi vrh. Bloki ${order.filter(b=>!dragBlok(b,now)).join(", ")} so poceni in se uporabljajo brez omejitve.</div>`;
 }
-// ALI SE SPLAČA DVIGNITI MOČ: dvig za dP kW stane dP x (cena kW na mesec). Vsaka ura, ko dodatno moč
-// izkoristiš, prinese dP x (cena, ki bi jo sicer plačal - cena polnjenja v bloku). dP se pokrajša:
-//     potrebne ure v mesecu = cena kW na mesec / razlika v ceni na kWh
-// Cene so končne (z omrežnino za energijo in DDV), kot v seznamu ur zgoraj.
+// ALI SE SPLAČA DVIGNITI MOČ. Alternativa je polnjenje na priključku s samooskrbo, kjer kWh v vseh
+// blokih stane enako (energija in omrežnina po enotni tarifi): 18,42 c z DDV. Za vsak blok uredimo
+// njegove ure iz naloženih cen od najcenejše navzgor (tudi negativne) in seštevamo, koliko en dodaten
+// kW v teh urah prihrani proti 18,42 c, dokler to ne pokrije mesečne cene tega kW. Vzorec cen
+// preračunamo na cel mesec po številu ur, ki jih blok ima v tem mesecu.
 function renderSplacilo(){
   const box=document.getElementById("splBox"); if(!box) return;
-  const now=nowLjubljana(), order=blokiSezone(now);
-  // koliko ur ima posamezni blok v tem mesecu
-  const ure={}; const y=now.getFullYear(), m=now.getMonth(), dni=new Date(y,m+1,0).getDate();
-  for(let d=1; d<=dni; d++) for(let h=0; h<24; h++){ const b=blockAt(new Date(y,m,d,h,30)); ure[b]=(ure[b]||0)+1; }
-  const pB=parseFloat((document.getElementById("splPb")||{}).value||"9");
-  const pA=parseFloat((document.getElementById("splPa")||{}).value||"20");
+  const ALT=(0.1299+0.01864+0.00013+0.0008+0.00153)*1.22*100;        // c/kWh na samooskrbi
+  const now=nowLjubljana(), order=blokiSezone(now), sez=season(now);
+  const y=now.getFullYear(), m=now.getMonth(), dni=new Date(y,m+1,0).getDate();
+  const ure={};
+  for(let d=1; d<=dni; d++) for(let h=0; h<24; h++){ const bb=blockAt(new Date(y,m,d,h,30)); ure[bb]=(ure[bb]||0)+1; }
+  const vz=hourlyAvg(SIPXALL).filter(x=>season(x.t)===sez).map(x=>{ const bb=blockAt(x.t); return {b:bb, c:allInFor(x.p,bb), t:x.t}; });
+  if(!vz.length){ box.innerHTML='<div class="note">Cene še niso naložene.</div>'; return; }
   const f1=v=>v.toFixed(1).replace(".",","), e2=v=>v.toFixed(2).replace(".",",");
-  const razl=(pA-pB)/100;
   const vrst=order.map(b=>{
-    const k=kwCenaMes(b,now), H= razl>0 ? k/razl : Infinity, na=ure[b]||0;
-    const ok = H<=na;
-    const sod = !isFinite(H) ? `se ne splača` : !ok ? `nikoli (blok ima le ${na} h)` :
-                H<1 ? `skoraj vedno` : `ob ${Math.round(H/na*100)} % ur bloka`;
-    return `<tr><td><span class="evdot" style="background:${COL[b]}"></span>blok ${b}</td>`+
-      `<td style="text-align:right">${e2(k)} €</td>`+
-      `<td style="text-align:right"><b style="color:${!isFinite(H)||!ok?"var(--b2)":H<na*0.25?"var(--energy)":"var(--ink)"}">${isFinite(H)?f1(H)+" h":"-"}</b></td>`+
-      `<td style="text-align:right">${na} h</td><td style="font-size:12px">${sod}</td></tr>`;
+    const k=kwCenaMes(b,now), cene=vz.filter(x=>x.b===b).map(x=>x.c).sort((p,q)=>p-q);
+    const na=ure[b]||0;
+    if(!cene.length) return `<tr><td><span class="evdot" style="background:${COL[b]}"></span>blok ${b}</td><td style="text-align:right">${e2(k)} €</td><td colspan="3" style="color:var(--faint)">v naloženih cenah ni ur tega bloka</td></tr>`;
+    const s=na/cene.length;                     // koliko ur meseca predstavlja ena ura vzorca
+    let cum=0, hrs=0, sumP=0, wsum=0, need=null;
+    for(const c of cene){
+      const g=(ALT-c)/100; if(g<=0) break;
+      if(cum+s*g>=k){ const part=(k-cum)/g; hrs+=part; sumP+=c*part; wsum+=part; need=hrs; break; }
+      cum+=s*g; hrs+=s; sumP+=c*s; wsum+=s;
+    }
+    const cenejsih=cene.filter(c=>c<ALT).length/cene.length;
+    if(need==null) return `<tr><td><span class="evdot" style="background:${COL[b]}"></span>blok ${b}</td><td style="text-align:right">${e2(k)} €</td>`+
+      (cenejsih===0
+        ? `<td colspan="3" style="font-size:12px">v teh dneh je bila vsaka ura tega bloka dražja od ${f1(ALT)} c, zato se polnjenje tu ne splača ne glede na moč</td></tr>`
+        : `<td colspan="2" style="color:var(--b2)">ne povrne se</td><td style="font-size:12px">tudi v vseh urah, cenejših od ${f1(ALT)} c, bi prihranil le ${e2(cum)} €</td></tr>`);
+    const delez=need/na;
+    return `<tr><td><span class="evdot" style="background:${COL[b]}"></span>blok ${b}</td><td style="text-align:right">${e2(k)} €</td>`+
+      `<td style="text-align:right"><b style="color:${delez<0.1?"var(--energy)":delez<0.3?"var(--ink)":"var(--b2)"}">${need<0.05?"&lt; 0,1":f1(need)} h</b></td>`+
+      `<td style="text-align:right">${wsum>0?f1(sumP/wsum):"-"} c</td>`+
+      `<td style="font-size:12px">${need<0.05?"skoraj vedno":`${Math.max(1,Math.round(delez*100))} % od ${na} h bloka`}`+
+      `<br><span style="color:var(--faint)">cenejših od ${f1(ALT)} c je ${Math.round(cenejsih*100)} % ur</span></td></tr>`;
   }).join("");
-  // drsnika ohranimo, posodobimo le izpis
-  if(!document.getElementById("splPb")){
-    box.innerHTML=
-      `<div style="display:grid;grid-template-columns:auto 1fr auto;gap:6px 10px;align-items:center;font-size:14px;color:var(--mut)">`+
-      `<span>polnil bi po</span><input id="splPb" type="range" min="0" max="30" step="0.5" value="9" oninput="renderSplacilo()"><b id="splPbV"></b>`+
-      `<span>sicer bi plačal</span><input id="splPa" type="range" min="0" max="35" step="0.5" value="20" oninput="renderSplacilo()"><b id="splPaV"></b>`+
-      `</div><div id="splOut" style="margin-top:8px"></div>`;
-    return renderSplacilo();
-  }
-  document.getElementById("splPbV").textContent=f1(pB)+" c";
-  document.getElementById("splPaV").textContent=f1(pA)+" c";
-  document.getElementById("splOut").innerHTML=
-    `<table class="evtable"><tr><th>blok</th><th>1 kW / mesec</th><th>potrebnih ur</th><th>blok ima</th><th></th></tr>${vrst}</table>`+
-    `<div class="note" style="margin-top:6px">Toliko ur v mesecu moraš dodatno moč izkoristiti, da se dvig povrne, `+
-    `<b>ne glede na to, za koliko kW dvigneš</b>: vsak dodaten kW stane enako, kot ga v teh urah prihraniš. `+
-    (razl>0?`Razlika ${f1(pA-pB)} c/kWh pomeni, da vsak dodaten kW v eni uri prihrani ${e2(razl)} €. `:``)+
-    `Cene so končne, z omrežnino za energijo in DDV, kot v seznamu ur. Ure štejejo za cel mesec ${MESECI[now.getMonth()]}.</div>`;
+  const t0=vz[0].t, t1=vz[vz.length-1].t, dd=t=>`${t.getDate()}. ${t.getMonth()+1}.`;
+  const MES=["januar","februar","marec","april","maj","junij","julij","avgust","september","oktober","november","december"];
+  box.innerHTML=
+    `<table class="evtable"><tr><th>blok</th><th>1 kW na mesec</th><th>dovolj najcenejših ur</th><th>njihova povpr. cena</th><th></th></tr>${vrst}</table>`+
+    `<div class="note" style="margin-top:6px">Koliko ur v mesecu moraš dodatno moč izkoristiti v <b>najcenejših urah bloka</b>, da se dvig povrne `+
+    `proti polnjenju na samooskrbi (${f1(ALT)} c/kWh v vseh blokih). Velja <b>ne glede na to, za koliko kW dvigneš</b>, in le, če v teh urah porabiš ves dodatni kW. `+
+    `Ocena temelji na urnih cenah od ${dd(t0)} do ${dd(t1)} (vključno z negativnimi), preračunanih na ${MES[m]}.</div>`;
 }
 function calcEVSchedule(){
   const out=document.getElementById("evResult");

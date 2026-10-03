@@ -379,6 +379,7 @@
           border:1px solid var(--line);border-radius:7px;padding:6px 8px;font-family:var(--mono);font-size:15px;text-align:right">
         <span style="font-size:14px;color:var(--mut)">c€/kWh</span>
       </div>
+      <div class="row" id="evLimRow" style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"></div>
       <div class="row" style="margin-top:8px;display:flex;align-items:center;gap:8px">
         <input id="ev_move" type="checkbox" style="width:18px;height:18px">
         <label for="ev_move" style="font-size:14px;color:var(--mut)">Med dnevom lahko avte prestavljam: Hyundai na 11 kW polnilnico, tisti z nje pa na sproščeno 2,5 kW vtičnico</label>
@@ -402,7 +403,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-02 16:28</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-03 11:57</span>
     </div>
 
   </div>
@@ -1984,6 +1985,8 @@ function pointsForZone(z, extMG){
 // Razpored ob DANEM razporedu parkiranja. layout(si) vrne cone avtov v četrturi si.
 function scheduleLayout(cars, hours, extMG, layout, opts){
   opts=opts||{}; const alpha=opts.alpha||0, beta=opts.beta||0;
+  // meja skupne moči priključka po blokih (kW); brez meje = neomejeno
+  const capKw = h => (opts.caps && opts.caps[blockAt(h.t)]!=null) ? opts.caps[blockAt(h.t)] : Infinity;
   const need={}; cars.forEach(c=>need[c.id]=c.needKwh);
   const ids=cars.map(c=>c.id);
   const all=hours.slice().sort((a,b)=>a.t-b.t);
@@ -1996,16 +1999,19 @@ function scheduleLayout(cars, hours, extMG, layout, opts){
     all.slice().sort((a,b)=>a.price-b.price || a.t-b.t).forEach(h=>{
       if(ids.every(id=>need[id]<=0.01)) return;
       const z=layout(idxOf.get(h.t.getTime())), frac=(h.frac||1)*0.25, busy=new Set(); let touched=false;
+      const lim=capKw(h); let sumKw=0;
       ptIds.forEach(pid=>{
         let best=null;
         cars.forEach(c=>{
           if(busy.has(c.id)||need[c.id]<=0.01) return;
           if(!pointsForZone(z[c.id],extMG).includes(pid)) return;
           const soc=c.tgt-(need[c.id]/c.batt)*100;
-          const kwh=Math.min(Math.min(powerAtSoc(c,soc),POINTS[pid].kw)*EV_EFF*frac, need[c.id]);
-          if(!best||kwh>best.kwh+1e-9) best={id:c.id,kwh};
+          const kw=Math.min(powerAtSoc(c,soc),POINTS[pid].kw);
+          if(sumKw+kw>lim+1e-9) return;
+          const kwh=Math.min(kw*EV_EFF*frac, need[c.id]);
+          if(!best||kwh>best.kwh+1e-9) best={id:c.id,kwh,kw};
         });
-        if(best){ busy.add(best.id); need[best.id]-=best.kwh; touched=true; }
+        if(best){ busy.add(best.id); need[best.id]-=best.kwh; sumKw+=best.kw; touched=true; }
       });
       if(touched) used.add(h.t.getTime());
     });
@@ -2030,21 +2036,24 @@ function scheduleLayout(cars, hours, extMG, layout, opts){
       const best=Math.min(powerAtSoc(c,soc),POINTS.wb.kw)*EV_EFF*frac;
       urg[c.id]= best>0 ? Math.min(3,(need[c.id]/best)/remSlots) : 0; });
     let bestSet=null,bestV=-Infinity,bestK=-1;
-    const walk=(i,usedPt,cur,v,k)=>{
+    const lim=capKw(h);
+    const walk=(i,usedPt,cur,v,k,kwSum)=>{
       if(i===live.length){ if(v>bestV+1e-9||(Math.abs(v-bestV)<=1e-9&&k>bestK+1e-9)){bestV=v;bestK=k;bestSet=cur.slice();} return; }
-      const c=live[i]; walk(i+1,usedPt,cur,v,k);
+      const c=live[i]; walk(i+1,usedPt,cur,v,k,kwSum);
       const moving = z[c.id]!==zPrev[c.id];
       pointsForZone(z[c.id],extMG).forEach(pid=>{
         if(usedPt.has(pid)) return;
         const soc=c.tgt-(need[c.id]/c.batt)*100;
-        let g=Math.min(Math.min(powerAtSoc(c,soc),POINTS[pid].kw)*EV_EFF*frac, need[c.id]);
+        const kw=Math.min(powerAtSoc(c,soc),POINTS[pid].kw);
+        if(kwSum+kw>lim+1e-9) return;                      // meja moči v tem bloku
+        let g=Math.min(kw*EV_EFF*frac, need[c.id]);
         if(moving) g*=(1-REPARK_PAUSE);
         if(g<=0) return;
         const w=1+alpha*urg[c.id]-beta*regret;
-        usedPt.add(pid); cur.push([c,pid,g]); walk(i+1,usedPt,cur,v+g*w,k+g); cur.pop(); usedPt.delete(pid);
+        usedPt.add(pid); cur.push([c,pid,g]); walk(i+1,usedPt,cur,v+g*w,k+g,kwSum+kw); cur.pop(); usedPt.delete(pid);
       });
     };
-    walk(0,new Set(),[],0,0);
+    walk(0,new Set(),[],0,0,0);
     (bestSet||[]).forEach(([c,pid,g])=>{
       const soc=c.tgt-(need[c.id]/c.batt)*100;
       if(lastPt[c.id] && lastPt[c.id]!==pid) replugs++;
@@ -2113,6 +2122,67 @@ function planToResults(cars, plan){
   }).filter(r=>r.sessions.length);
 }
 
+// ===================================================================================
+// OBRAČUNSKA MOČ V OPTIMIZATORJU
+// Za vsak blok se v mesecu obračuna ena sama najvišja četrtura (zaokrožena na 0,1 kW, ne nižja od
+// bloka pred njim). Že doseženi vrhovi tega meseca (iz Moj Elektro, prek racuni.json) so plačani,
+// zato je polnjenje do njih glede moči brezplačno; vsak kW nad njimi stane po ceni bloka za CEL mesec,
+// dvig najnižjega bloka pa še prispevek SPTE in OVE. Strošek se prišteje razporedu.
+let EV_BASE_PEAKS = {};      // {"2026-10": {2: kW, 3: kW, ...}}
+let EV_BASE_INFO = null;     // {mesec, izmerjenoDo}
+const SPTE_KW_OPT = 0.77562;
+function mesecKey(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); }
+function blokiSezone(d){ return season(d)==="visoka" ? [1,2,3,4,5] : [2,3,4,5]; }
+function cenaKw(b,d){ return TARIFF[b].moc * (b===1 ? b1Mult(d) : 1); }
+function obracunskaMoc(peaks, order){ const P={}; let prev=0;
+  order.forEach(b=>{ const own=Math.round((peaks[b]||0)*10)/10; P[b]=Math.max(own,prev); prev=P[b]; }); return P; }
+// Blok je "drag", če 1 kW vrha na mesec stane vsaj 1 EUR z DDV (poleti blok 2, pozimi bloka 1 in 2).
+// Pri poceni blokih (3 do 5) je moč za cel mesec tako poceni, da jo razpored uporablja brez omejitve.
+function kwCenaMes(b,d){ const o=blokiSezone(d); return (cenaKw(b,d)+(b===o[0]?SPTE_KW_OPT:0))*1.22; }
+function dragBlok(b,d){ return kwCenaMes(b,d) >= 1; }
+let EV_LIM = {mesec:null, b:{}};   // tvoje mesečne meje za drage bloke (kW)
+function osnovaVrhov(k){             // že plačano: dosežen vrh ali tvoja meja, kar je višje
+  const base={...(EV_BASE_PEAKS[k]||{})};
+  if(EV_LIM.mesec===k) Object.keys(EV_LIM.b).forEach(b=>{ base[b]=Math.max(base[b]||0, EV_LIM.b[b]||0); });
+  return base;
+}
+function strosekMoci(plan){
+  const kwTs={}; plan.forEach(x=>{ kwTs[x.ts]=(kwTs[x.ts]||0)+x.kw; });
+  const mes={};
+  Object.keys(kwTs).forEach(ts=>{ const d=new Date(+ts), k=mesecKey(d), b=blockAt(d);
+    const m=mes[k]=mes[k]||{d, vrh:{}}; if(kwTs[ts]>(m.vrh[b]||0)) m.vrh[b]=kwTs[ts]; });
+  let eur=0; const dvigi=[];
+  Object.keys(mes).forEach(k=>{
+    const m=mes[k], order=blokiSezone(m.d), base=osnovaVrhov(k);
+    const pred=obracunskaMoc(base,order), sk={};
+    order.forEach(b=>sk[b]=Math.max(base[b]||0, m.vrh[b]||0));
+    const po=obracunskaMoc(sk,order);
+    order.forEach(b=>{ if(!dragBlok(b,m.d)) return;
+      const dP=po[b]-pred[b]; if(dP>1e-9){ const e=dP*kwCenaMes(b,m.d); eur+=e; dvigi.push({mesec:k,b,od:pred[b],na:po[b],eur:e}); } });
+  });
+  return {eur, dvigi};
+}
+
+// Vnos mesečne meje moči za drage bloke tekočega meseca. Vrednost velja za ta mesec.
+function renderEvLim(){
+  const row=document.getElementById("evLimRow"); if(!row) return;
+  const now=nowLjubljana(), k=mesecKey(now), order=blokiSezone(now);
+  let shr=null; try{ shr=JSON.parse(localStorage.getItem("evLimV1")||"null"); }catch(e){}
+  const drage=order.filter(b=>dragBlok(b,now));
+  const f1=v=>(Math.round(v*10)/10).toFixed(1).replace(".",",");
+  row.innerHTML=`<label style="font-size:14px;color:var(--mut)">ta mesec dovolim moč</label>`+
+    drage.map(b=>{
+      const v=(shr&&shr.mesec===k&&shr.b&&shr.b[b])?shr.b[b]:"";
+      const vrh=(EV_BASE_PEAKS[k]||{})[b]||0;
+      return `<span style="display:inline-flex;align-items:center;gap:6px;font-size:14px;color:var(--mut)">`+
+        `<span class="evdot" style="background:${COL[b]}"></span>blok ${b}`+
+        `<input data-evlim="${b}" type="number" step="0.5" min="0" value="${v}" placeholder="${f1(vrh)}" style="width:58px;background:var(--panel2);color:var(--ink);`+
+        `border:1px solid var(--line);border-radius:7px;padding:6px 8px;font-family:var(--mono);font-size:15px;text-align:right"> kW`+
+        `<span style="color:var(--faint);font-size:12px">(${kwCenaMes(b,now).toFixed(2).replace(".",",")} €/kW na mesec${vrh>0?`, dosežen ${f1(vrh)} kW`:``})</span></span>`;
+    }).join(" ")+
+    `<div style="width:100%;font-size:12px;color:var(--faint)">Moč v dragem bloku se plača za cel mesec po najvišji četrturi. Tukaj se odločiš, koliko je ta mesec sprejmeš; `+
+    `prazno pomeni le že doseženi vrh. Bloki ${order.filter(b=>!dragBlok(b,now)).join(", ")} so poceni in se uporabljajo brez omejitve.</div>`;
+}
 function calcEVSchedule(){
   const out=document.getElementById("evResult");
   const now=nowLjubljana();
@@ -2155,15 +2225,49 @@ function calcEVSchedule(){
   // skupaj načrpa največ energije (ob enakem izkupičku manj premikov, nato cenejšega).
   // Jakost 0 je stari kratkovidni razpored, zato nov rezultat ne more biti slabši od njega.
   const slots=toSlots(poolAll);
-  const score=r=>({ kwh:r.plan.reduce((a,x)=>a+x.kwh,0),
-                    cost:r.plan.reduce((a,x)=>a+x.price*x.kwh/100,0),
-                    reparks:r.reparks, replugs:r.replugs });
-  // Izračunamo vse razporede (več jakosti pogleda naprej in zadržanosti, vsak razpored parkiranja).
+  // Ocena razporeda: energija, strošek energije in DODATNI strošek moči (dvig že doseženih vrhov).
+  const score=r=>{ const pm=strosekMoci(r.plan), en=r.plan.reduce((a,x)=>a+x.price*x.kwh/100,0);
+    return { kwh:r.plan.reduce((a,x)=>a+x.kwh,0), costEn:en, moc:pm.eur, dvigi:pm.dvigi,
+             cost:en+pm.eur, reparks:r.reparks, replugs:r.replugs }; };
+  const val=sc=>sc.kwh*cap/100 - sc.cost;
+
+  // MEJE MOČI PO BLOKIH. Pri dragih blokih (cena kW nad 1 EUR na mesec) preizkusimo več mej od že
+  // doseženega vrha navzgor, pri srednje dragih le "obdrži vrh" ali "brez meje", pri skoraj
+  // brezplačnih le "brez meje".
+  // tvoje mesečne meje za drage bloke (shranjene za tekoči mesec)
+  const mk0=mesecKey(now);
+  EV_LIM={mesec:mk0, b:{}};
+  document.querySelectorAll("[data-evlim]").forEach(inp=>{ const v=parseFloat(String(inp.value).replace(",","."));
+    if(!isNaN(v)&&v>0) EV_LIM.b[inp.dataset.evlim]=v; });
+  try{ localStorage.setItem("evLimV1", JSON.stringify(EV_LIM)); }catch(e){}
+  const base0=osnovaVrhov(mesecKey(slots[0].t));
+  const blk=[...new Set(slots.map(x=>blockAt(x.t)))];
+  const ravni={}, eff={};
+  blk.forEach(b=>{
+    const d=slots.find(x=>blockAt(x.t)===b).t;
+    eff[b]=Math.round((base0[b]||0)*10)/10;
+    ravni[b]= dragBlok(b,d) ? [...new Set([eff[b],2,2.5,4.5,7.2,11,Infinity].filter(x=>x>=eff[b]))] : [Infinity];
+  });
+  let combos=[{}];
+  blk.forEach(b=>{ combos=combos.flatMap(c=>ravni[b].map(v=>({...c,[b]:v}))); });
+  if(combos.length>40) combos=combos.slice(0,40);   // varovalka za hitrost na telefonu
+  // 1. korak (hiter): le domači razpored parkiranja, izberemo dve najboljši kombinaciji mej
+  const home=()=>({...HOME_ZONE});
+  const gr=combos.map(cp=>{
+    let best=-Infinity;
+    [{alpha:0.5,beta:0},{alpha:0.5,beta:2}].forEach(o=>{
+      const r=scheduleLayout(cars.map(c=>({...c})), slots, extOn, home, {...o, caps:cp});
+      r.reparks=0; const v=val(score(r)); if(v>best) best=v; });
+    return {cp, v:best};
+  }).sort((x,y)=>y.v-x.v);
+  // 2. korak (podrobno): pogled naprej, zadržanost in vsi razporedi parkiranja pri teh mejah
   const runs=[];
-  [0,0.25,0.5,1,2,4].forEach(a=>{ [0,0.5,1,2,4].forEach(bt=>{
-    assignSchedule(cars.map(c=>({...c})), slots, moveIoniq, extOn, {alpha:a, beta:bt, all:true})
-      .forEach(r=>runs.push({r, s:score(r)}));
-  }); });
+  gr.slice(0,2).forEach(({cp})=>{
+    [0,0.5,1,2].forEach(a=>{ [0,1,2,4].forEach(bt=>{
+      assignSchedule(cars.map(c=>({...c})), slots, moveIoniq, extOn, {alpha:a, beta:bt, all:true, caps:cp})
+        .forEach(r=>{ r.caps=cp; runs.push({r, s:score(r)}); });
+    }); });
+  });
   // IZBIRA RAZPOREDA. Vsak kWh ima zate vrednost, ki si jo določil s pragom cene (cap):
   // pripravljen si plačati do cap c€/kWh. Razpored zato ocenimo kot
   //     korist = energija x prag - strošek
@@ -2171,7 +2275,6 @@ function calcEVSchedule(){
   // (npr. "98 % energije"), pri katerih bi 0,05 kWh razlike odločilo o pol evra.
   //  - "najcenejše": največja korist med vsemi razporedi
   //  - "čim manj preparkiranja": največja korist med razporedi BREZ preparkiranja
-  const val=sc=>sc.kwh*cap/100 - sc.cost;
   let few=null, fewS=null, cheap=null, cheapS=null;
   runs.forEach(({r,s:sc})=>{
     if(sc.reparks===0 && (!fewS || val(sc)>val(fewS)+0.005 ||
@@ -2182,14 +2285,28 @@ function calcEVSchedule(){
   const mode=(document.querySelector('input[name="ev_mode"]:checked')||{value:"few"}).value;
   const alts={few:{r:few,s:fewS}, cheap:{r:cheap,s:cheapS}};
   const opt = alts[mode].r;
+  // KAJ BI PRINESLA VIŠJA MEJA v dragem bloku: za vsako raven primerjamo dodatno energijo v tem
+  // oknu z mesečnim stroškom te ravni. Odločitev je mesečna, zato pokažemo, v koliko takih dneh se povrne.
+  const mejeInfo=[];
+  const capEff={}; blk.forEach(b=>capEff[b]= ravni[b].length===1 ? Infinity : eff[b]);
+  const homeRun=cp=>{ const r=scheduleLayout(cars.map(c=>({...c})), slots, extOn, home, {alpha:0.5, beta:1, caps:cp});
+    return { kwh:r.plan.reduce((a,x)=>a+x.kwh,0), en:r.plan.reduce((a,x)=>a+x.price*x.kwh/100,0) }; };
+  blk.filter(b=>ravni[b].length>1).forEach(b=>{
+    const d=slots.find(x=>blockAt(x.t)===b).t, ref=homeRun(capEff);
+    [2.5,4.5,7.2,11,15.5].filter(L=>L>eff[b]+0.05).forEach(L=>{
+      const r=homeRun({...capEff,[b]:L}), dK=r.kwh-ref.kwh, dC=r.en-ref.en;
+      const mes=(L-eff[b])*kwCenaMes(b,d), korist=dK*cap/100-dC;
+      mejeInfo.push({b, L, mes, dK, cKwh: dK>0.05? dC/dK*100 : null, dni: korist>0.01? Math.ceil(mes/korist) : null});
+    });
+  });
   const results=planToResults(cars, opt.plan);
   const capped=Object.values(opt.need).some(v=>v>0.05);
 
   // primerjava: enaka mesta, a takoj in po vrsti (brez izbiranja cenejših ur in brez praga)
   const naive=assignSchedule(cars, toSlots(future.slice().sort((a,b)=>a.t-b.t)), moveIoniq, extOn, {naive:true});
-  const naiveCost=naive.plan.reduce((a,x)=>a+x.price*x.kwh/100,0);
+  const naiveCost=naive.plan.reduce((a,x)=>a+x.price*x.kwh/100,0)+strosekMoci(naive.plan).eur;
 
-  displayEVResult(future, results, naiveCost, capped, cap, skippedH, extOn, startFrom, opt, alts, mode);
+  displayEVResult(future, results, naiveCost, capped, cap, skippedH, extOn, startFrom, opt, alts, mode, mejeInfo, naive.plan.reduce((a,x)=>a+x.kwh,0));
   renderEVPriceList(future, results, startFrom);
 }
 
@@ -2233,12 +2350,14 @@ function renderEVPriceList(future, results, startFrom){
   el.innerHTML=html;
 }
 
-function displayEVResult(future, results, naiveCost, capped, cap, skippedH, extOn, startFrom, opt, alts, mode){
+function displayEVResult(future, results, naiveCost, capped, cap, skippedH, extOn, startFrom, opt, alts, mode, mejeInfo, naiveKwh){
   const out=document.getElementById("evResult");
   const order={bmw:0,ioniq:1,mg:2};
   results=results.slice().sort((a,b)=>(order[a.car.id]??9)-(order[b.car.id]??9));
   const totalKwh=results.reduce((a,r)=>a+r.kwh,0);
-  const totalCost=results.reduce((a,r)=>a+r.costEUR,0);
+  const sc = alts ? alts[mode].s : null;
+  const mocEur = sc ? sc.moc : 0;
+  const totalCost=results.reduce((a,r)=>a+r.costEUR,0) + mocEur;
   const savings=naiveCost-totalCost;
   const savingsPct= naiveCost>0.001 ? (savings/naiveCost*100) : 0;
   const hh=t=>`${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`;
@@ -2282,8 +2401,32 @@ function displayEVResult(future, results, naiveCost, capped, cap, skippedH, extO
     `<div class="tw"><table class="evtable">`+
     `<tr><th>vozilo</th><th>okno</th><th>moč</th><th>trajanje</th><th>energija</th><th>SOC</th><th>povpr. cena</th><th>strošek</th></tr>`+
     rows+
+    (mocEur>0.005?`<tr><td colspan="7">dvig obračunske moči (za cel mesec)</td><td>${mocEur.toFixed(2)} €</td></tr>`:``)+
     `<tr class="sum"><td>skupaj</td><td></td><td></td><td></td><td>${totalKwh.toFixed(1)} kWh</td><td></td><td></td><td>${totalCost.toFixed(2)} €</td></tr>`+
     `</table></div>`+
+    (()=>{ if(!sc) return ``;
+      const f1=v=>(Math.round(v*10)/10).toFixed(1).replace(".",","), e2=v=>v.toFixed(2).replace(".",",");
+      const k=mesecKey(startFrom), base=EV_BASE_PEAKS[k]||{};
+      const drage=blokiSezone(startFrom).filter(b=>dragBlok(b,startFrom));
+      let t=`<b>Obračunska moč.</b> `;
+      t+=drage.map(b=>{
+        const vrh=base[b]||0, lim=(EV_LIM.mesec===k&&EV_LIM.b[b])||0, ef=Math.max(vrh,lim);
+        let x=`Blok ${b}: `+(vrh>0?`dosežen vrh ${f1(vrh)} kW`:`ta mesec še brez vrha`);
+        if(lim>vrh) x+=`, tvoja meja ${f1(lim)} kW (stane ${e2((lim-vrh)*kwCenaMes(b,startFrom))} € več na mesec, ne glede na uporabo)`;
+        x+= ef>0 ? `; razpored ostane do ${f1(ef)} kW brez dodatnega stroška.`
+                 : `; razpored v bloku ${b} ne polni, razen če se dvig vrha povrne že v tem oknu.`;
+        return x; }).join(" ")+` `;
+      if(sc.dvigi.length) t+=`Razpored vseeno dvigne `+sc.dvigi.map(d=>`blok ${d.b} z ${f1(d.od)} na ${f1(d.na)} kW (+${e2(d.eur)} €)`).join(", ")+`, ker se to že v tem oknu povrne. `;
+      t+=`<span style="color:var(--faint)">Vrhovi zadnjega dne v Moj Elektro še niso vidni; če si danes že polnil z večjo močjo, je dejanski vrh lahko višji.</span>`;
+      let tab="";
+      if(mejeInfo&&mejeInfo.length){
+        tab=`<table class="evtable" style="margin-top:8px"><tr><th>meja</th><th>stane na mesec</th><th>v tem oknu dodatno</th><th>se povrne</th></tr>`+
+          mejeInfo.map(m=>`<tr><td>blok ${m.b}: ${f1(m.L)} kW</td><td>${e2(m.mes)} €</td>`+
+            `<td>${m.dK>0.05?`+${m.dK.toFixed(1).replace(".",",")} kWh po ${m.cKwh.toFixed(1).replace(".",",")} c`:`nič`}</td>`+
+            `<td>${m.dni==null?`ne`:(m.dni<=1?`že danes`:`v ${m.dni} takih dneh`)}</td></tr>`).join("")+
+          `</table><div style="font-size:12px;color:var(--faint);margin-top:4px">Višja meja se splača, če boš v mesecu imel vsaj toliko podobnih dni. Vpiši jo zgoraj pri "ta mesec dovolim moč".</div>`;
+      }
+      return `<div class="evsum" style="margin-bottom:8px">${t}${tab}</div>`; })()+
     `<div class="evsum">Prag ${cap} c€/kWh je izločil ${skippedH.toFixed(1)} h dragih ur iz razpoložljivega okna. `+
     (`Polnilna mesta delujejo hkrati, vsako polni en avto naenkrat, med dnevom pa se lahko predajo naprej. `+
     (()=>{  // pokaži predaje mest, npr. "11 kW polnilnica: BMW -> MG -> Hyundai"
@@ -2316,8 +2459,12 @@ function displayEVResult(future, results, naiveCost, capped, cap, skippedH, extO
        return `<div style="margin:8px 0;padding:8px 10px;border:1px solid var(--line);border-radius:8px">`+
          line(mode==="few","Brez preparkiranja",b)+`<br>`+
          line(mode==="cheap","S preparkiranjem, če se splača",a)+razlika+`</div>`; })() : ``)+
-    `Proti takojšnjemu polnjenju brez optimizacije (${naiveCost.toFixed(2)} €) ta razpored prihrani `+
-    `<b style="color:var(--energy)">${savings.toFixed(2)} € (${savingsPct.toFixed(0)} %)</b>.`+
+    ( (naiveKwh>0 && totalKwh < naiveKwh*0.97)
+      ? `Takojšnje polnjenje brez optimizacije bi napolnilo ${naiveKwh.toFixed(1)} kWh za ${naiveCost.toFixed(2)} € `+
+        `(<b>${(naiveCost/naiveKwh*100).toFixed(1)} c/kWh</b>, z dvigom moči), ta razpored pa ${totalKwh.toFixed(1)} kWh po `+
+        `<b style="color:var(--energy)">${(totalCost/Math.max(totalKwh,0.01)*100).toFixed(1)} c/kWh</b>. Zneskov ne primerjam, ker gre za različno količino energije.`
+      : `Proti takojšnjemu polnjenju brez optimizacije (${naiveCost.toFixed(2)} €, z dvigom moči) ta razpored prihrani `+
+        `<b style="color:var(--energy)">${savings.toFixed(2)} € (${savingsPct.toFixed(0)} %)</b>.` )+
     (capped?` <span style="color:var(--b2)">Poceni ur (pod pragom) ni dovolj, da bi vsi avtomobili dosegli cilj; prikazano je najboljše možno.${extOn?'':' Vklopi izredni kabel za MG, če bi to pomagalo.'}</span>`:``)+
     `</div>`;
   renderEVGantt("evGanttBox", future, results);
@@ -2450,6 +2597,10 @@ async function loadRacuni(){
   const r=await tryFetchJSON(`racuni.json?t=${Math.floor(Date.now()/60000)}`);
   if(!r.data){ box.innerHTML='<div class="note">Računi še niso na voljo. Ko opravilo "Posodobi račune" prvič steče, se prikažejo tukaj.</div>'; return; }
   const d=r.data, rac=d.racuni||{}, izr=d.izracuni||{};
+  // že doseženi vrhovi po mesecih za optimizator polnjenja
+  Object.keys(izr).forEach(k=>{ const c=izr[k];
+    if(c.vrh) EV_BASE_PEAKS[k]=Object.fromEntries(Object.keys(c.vrh).map(b=>[b, c.vrh[b].lasten||0])); });
+  { const ck=mesecKey(nowLjubljana()); if(izr[ck]) EV_BASE_INFO={mesec:ck, izmerjenoDo:izr[ck].izmerjenoDo}; }
   const eur=v=>v==null?"-":v.toFixed(2).replace(".",",")+" €";
   const keys=[...new Set([...Object.keys(rac),...Object.keys(izr)])].sort().reverse();
   let placano=0, rows="", prihranek=0, placanoSam=0, sumKwh=0;
@@ -2522,7 +2673,8 @@ async function loadRacuni(){
     document.getElementById("racuniUpd").textContent=` · osveženo ${t.getDate()}.${t.getMonth()+1}. ob ${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`; }
 }
 
-loadRacuni();
+renderEvLim();
+loadRacuni().then(renderEvLim);
 setInterval(loadRacuni, 1000*60*60);
 setInterval(loadWeather15, 1000*60*60*3);
 </script>

@@ -412,7 +412,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-03 15:08</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-03 15:30</span>
     </div>
 
   </div>
@@ -1133,13 +1133,28 @@ function stopWave(done){
   if(done){ document.querySelectorAll("#sipxList .srow").forEach(restoreRow); drawSipxView(); }
 }
 // Izbira prikaza samo enega bloka: gumbi le za bloke, ki se v naloženih cenah pojavijo.
+// obračunska moč tekočega meseca (iz racuni.json); varno tudi pred nalaganjem računov
+function mocMeseca(){ try{ const k=mesecKey(nowLjubljana());
+  return {moc:(EV_BASE_MOC||{})[k]||null, vrh:(EV_BASE_VRH||{})[k]||null, info:EV_BASE_INFO}; }catch(e){ return {moc:null,vrh:null,info:null}; } }
 function renderBlkToggle(){
   const el=document.getElementById("blkToggle"); if(!el) return;
+  const MM=mocMeseca(), f1=v=>(Math.round(v*10)/10).toFixed(1).replace(".",",");
   const prisotni=[...new Set(SIPXVIEW.map(x=>blockAt(x.t)))].sort();
   if(sipxBlok!=null && !prisotni.includes(sipxBlok)) sipxBlok=null;
   el.innerHTML=`<button class="tab${sipxBlok==null?" on":""}" onclick="setSipxBlok(null)">vsi bloki</button>`+
     prisotni.map(b=>`<button class="tab${sipxBlok===b?" on":""}" onclick="setSipxBlok(${b})">`+
-      `<span class="evdot" style="background:${COL[b]}"></span>${b}</button>`).join("");
+      `<span class="evdot" style="background:${COL[b]}"></span>${b}`+
+      (MM.moc&&MM.moc[b]!=null?` <span style="font-size:11px;color:var(--faint);font-weight:400">${f1(MM.moc[b])} kW</span>`:``)+
+      `</button>`).join("");
+}
+// pri izbranem bloku: obračunska moč tega meseca in od kod izvira
+function mocStat(){
+  if(sipxBlok==null) return "";
+  const MM=mocMeseca(); if(!MM.moc||MM.moc[sipxBlok]==null) return "";
+  const b=sipxBlok, v=MM.vrh&&MM.vrh[b], f1=x=>(Math.round(x*10)/10).toFixed(1).replace(".",",");
+  let pod = v ? (v.izvor===b ? (v.ob?`vrh ${v.ob}`:``) : `dvignjeno na blok ${v.izvor}`) : ``;
+  if(MM.info&&MM.info.izmerjenoDo) pod += (pod?", ":"")+`izmerjeno do ${MM.info.izmerjenoDo}`;
+  return st(`obr. moč ta mesec`, `${f1(MM.moc[b])} kW`+(pod?`<br><span style="font-size:11px;color:var(--faint);font-weight:400">${pod}</span>`:``));
 }
 function setSipxBlok(b){ sipxBlok=b; renderSIPX(); }
 function renderSIPX(){
@@ -1162,8 +1177,8 @@ function renderSIPX(){
     stats.innerHTML=st(sipxBlok==null?"danes povpr.":`danes povpr. (blok ${sipxBlok})`,(av/10).toFixed(2)+" c€")+
       st("min",(mn/10).toFixed(2)+" c€ @"+hh(today.find(x=>x.p===mn).t))+
       st("max",(mx/10).toFixed(2)+" c€ @"+hh(today.find(x=>x.p===mx).t))+
-      st("ločljivost",priceRes==="hourly"?"urno (GEN-I)":"15-min (trg)");
-  } else stats.innerHTML = sipxBlok!=null ? `<div class="note" style="margin:0">Danes ni ur bloka ${sipxBlok}.</div>` : "";
+      st("ločljivost",priceRes==="hourly"?"urno (GEN-I)":"15-min (trg)")+mocStat();
+  } else stats.innerHTML = sipxBlok!=null ? mocStat()+`<div class="note" style="margin:0">Danes ni ur bloka ${sipxBlok}.</div>` : "";
   let nowIdx=-1; for(let i=0;i<SIPXVIEW.length;i++){ if(SIPXVIEW[i].t<=d) nowIdx=i; else break; }
   if(WAVE.mode==="off") drawSipxView();   // sicer graf riše razkrivanje samo (brez preblika pravih cen)
   renderList(nowIdx);
@@ -2173,6 +2188,7 @@ function planToResults(cars, plan){
 // dvig najnižjega bloka pa še prispevek SPTE in OVE. Strošek se prišteje razporedu.
 let EV_BASE_PEAKS = {};      // {"2026-10": {2: kW, 3: kW, ...}}
 let EV_BASE_INFO = null;     // {mesec, izmerjenoDo}
+var EV_BASE_MOC = {}, EV_BASE_VRH = {};   // obračunska moč po blokih in kdaj je bil vrh dosežen
 const SPTE_KW_OPT = 0.77562;
 function mesecKey(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); }
 function blokiSezone(d){ return season(d)==="visoka" ? [1,2,3,4,5] : [2,3,4,5]; }
@@ -2688,7 +2704,8 @@ async function loadRacuni(){
   const d=r.data, rac=d.racuni||{}, izr=d.izracuni||{};
   // že doseženi vrhovi po mesecih za optimizator polnjenja
   Object.keys(izr).forEach(k=>{ const c=izr[k];
-    if(c.vrh) EV_BASE_PEAKS[k]=Object.fromEntries(Object.keys(c.vrh).map(b=>[b, c.vrh[b].lasten||0])); });
+    if(c.vrh) EV_BASE_PEAKS[k]=Object.fromEntries(Object.keys(c.vrh).map(b=>[b, c.vrh[b].lasten||0]));
+    if(c.moc) EV_BASE_MOC[k]=c.moc; if(c.vrh) EV_BASE_VRH[k]=c.vrh; });
   { const ck=mesecKey(nowLjubljana()); if(izr[ck]) EV_BASE_INFO={mesec:ck, izmerjenoDo:izr[ck].izmerjenoDo}; }
   const eur=v=>v==null?"-":v.toFixed(2).replace(".",",")+" €";
   const keys=[...new Set([...Object.keys(rac),...Object.keys(izr)])].sort().reverse();
@@ -2764,7 +2781,7 @@ async function loadRacuni(){
 
 renderEvLim();
 renderSplacilo();
-loadRacuni().then(renderEvLim);
+loadRacuni().then(()=>{ renderEvLim(); if(SIPXVIEW.length) renderSIPX(); });
 setInterval(loadRacuni, 1000*60*60);
 setInterval(loadWeather15, 1000*60*60*3);
 </script>

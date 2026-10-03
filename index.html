@@ -423,7 +423,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-03 20:26</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-03 21:04</span>
     </div>
 
   </div>
@@ -1245,8 +1245,14 @@ function drawChart(chartId,data,nowT,opts){
   const mn=Math.min(...ps), mx=Math.max(...ps);
   const lo=Math.min(0,mn), hi=Math.max(mx,1), rng=(hi-lo)||1;
   const narrow = (window.innerWidth||1000)<=560;         // na telefonu naj bo graf višji
-  const BS = opts.blocks ? 16 : 0;                        // višina traku blokov pod stolpci
-  const W=1000,H=narrow?380:240,pl=8,prr=42,pt=16,pb=(opts.hours?54:34)+BS, iw=W-pl-prr, ih=H-pt-pb;
+  // Trak blokov: velikost določimo iz DEJANSKE širine grafa na zaslonu (graf je risan v 1000 enotah
+  // in se na telefonu skrči na približno tretjino), da je trak visok okoli 20 px in številka okoli 12 px.
+  // Graf za višino traku povišamo, da stolpci ne izgubijo prostora.
+  const cw=(document.getElementById(chartId)||{}).clientWidth || (narrow?340:900);
+  const sc=Math.max(0.25, Math.min(1.2, cw/1000));
+  const BS = opts.blocks ? Math.round(Math.min(64, 20/sc+4)) : 0;   // višina traku v enotah grafa
+  const BF = Math.round(Math.min(40, 12/sc));                        // velikost številke bloka
+  const W=1000,H=(narrow?380:240)+BS,pl=8,prr=42,pt=16,pb=(opts.hours?54:34)+BS, iw=W-pl-prr, ih=H-pt-pb;
   const bw=iw/N;
   const dayY=opts.hours?H-10:H-11;
   let bars="",axis="",grid="";
@@ -1284,13 +1290,13 @@ function drawChart(chartId,data,nowT,opts){
   // trak omrežninskih blokov: zaporedne enake bloke združimo, številko napišemo, kjer je dovolj prostora
   let blkStrip="";
   if(BS){
-    const y=pt+ih+2, hgt=BS-3;
+    const y=pt+ih+3, hgt=BS-5;
     for(let i=0;i<N;){
       const b=blockAt(data[i].t); let j=i; while(j+1<N && blockAt(data[j+1].t)===b) j++;
       const x0=pl+bw*i, w=bw*(j-i+1)-Math.min(bw*0.08,1.5);
       const op=(opts.only==null||opts.only===b)?1:0.18;
       blkStrip+=`<rect x="${x0.toFixed(2)}" y="${y}" width="${Math.max(w,0.6).toFixed(2)}" height="${hgt}" rx="2" fill="${COL[b]}" opacity="${op}"><title>blok ${b}</title></rect>`;
-      if(w>=18 && op===1) blkStrip+=`<text x="${(x0+w/2).toFixed(2)}" y="${y+hgt-2.5}" fill="${DARKTXT[b]?"#111":"#fff"}" font-size="11" font-weight="700" text-anchor="middle" font-family="JetBrains Mono">${b}</text>`;
+      if(w>=BF*0.8 && op===1) blkStrip+=`<text x="${(x0+w/2).toFixed(2)}" y="${(y+hgt/2+BF*0.36).toFixed(1)}" fill="${DARKTXT[b]?"#111":"#fff"}" font-size="${BF}" font-weight="700" text-anchor="middle" font-family="JetBrains Mono">${b}</text>`;
       i=j+1;
     }
   }

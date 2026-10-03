@@ -314,6 +314,7 @@
         <button class="tab" data-r="15min" onclick="setPriceRes('15min')">15-min (trg)</button>
         <button class="tab on" data-r="hourly" onclick="setPriceRes('hourly')">urno (kot GEN-I)</button>
       </div>
+      <div class="tabs" id="blkToggle" style="margin-top:2px"></div>
       <div class="barwrap" id="sipxChart"></div>
       <div id="sipxList" class="sipxlist"></div>
       <details style="margin-top:12px">
@@ -411,7 +412,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-03 14:52</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-03 15:08</span>
     </div>
 
   </div>
@@ -755,7 +756,8 @@ function checkPriceAlert(block){
    SIPX DAY-AHEAD  (api.energy-charts.info, cona SI)
    ============================================================ */
 let SIPX_SOURCE="";
-let SIPX={}, SIPXALL=[], SIPXVIEW=[], priceRes="hourly";   // SIPXALL surovi 15-min; SIPXVIEW prikaz (15-min ali urno združeno)
+let SIPX={}, SIPXALL=[], SIPXVIEW=[], priceRes="hourly";
+let sipxBlok=null;   // prikaz samo enega omrežninskega bloka (null = vsi)   // SIPXALL surovi 15-min; SIPXVIEW prikaz (15-min ali urno združeno)
 // urno združevanje (aritmetično povprečje, kakor GEN-I): ena vrednost na uro
 function hourlyAvg(arr){
   const g={};
@@ -1081,7 +1083,7 @@ function waveChartReveal(t,frac){
   const real=viewData(); if(!real.length) return;
   const n=real.length, lock=Math.floor(n*frac);
   const data=real.map((x,i)=> i<lock ? x : {t:x.t, p:waveSpot(i,t)});
-  drawChart("sipxChart", data, nowLjubljana(), {hours: sipxView==="td", blocks:true});
+  drawChart("sipxChart", data, nowLjubljana(), {hours: sipxView==="td", blocks:true, only:sipxBlok});
 }
 function waveTick(now){
   if(WAVE.mode==="off") return;
@@ -1130,8 +1132,19 @@ function stopWave(done){
   WAVE.raf=null; WAVE.mode="off";
   if(done){ document.querySelectorAll("#sipxList .srow").forEach(restoreRow); drawSipxView(); }
 }
+// Izbira prikaza samo enega bloka: gumbi le za bloke, ki se v naloženih cenah pojavijo.
+function renderBlkToggle(){
+  const el=document.getElementById("blkToggle"); if(!el) return;
+  const prisotni=[...new Set(SIPXVIEW.map(x=>blockAt(x.t)))].sort();
+  if(sipxBlok!=null && !prisotni.includes(sipxBlok)) sipxBlok=null;
+  el.innerHTML=`<button class="tab${sipxBlok==null?" on":""}" onclick="setSipxBlok(null)">vsi bloki</button>`+
+    prisotni.map(b=>`<button class="tab${sipxBlok===b?" on":""}" onclick="setSipxBlok(${b})">`+
+      `<span class="evdot" style="background:${COL[b]}"></span>${b}</button>`).join("");
+}
+function setSipxBlok(b){ sipxBlok=b; renderSIPX(); }
 function renderSIPX(){
   try{ renderSplacilo(); }catch(e){}
+  renderBlkToggle();
   const chart=document.getElementById("sipxChart"), stats=document.getElementById("sipxStats");
   if(!SIPXVIEW.length){ chart.innerHTML='<div class="err">Cene niso naložene. '+
     '<button class="tab" style="padding:4px 10px;margin-left:6px" onclick="loadSIPX()">poskusi znova</button> '+
@@ -1142,15 +1155,15 @@ function renderSIPX(){
   document.getElementById("sipxRange").innerHTML=`${f(SIPXVIEW[0].t)} \u2013 ${f(SIPXVIEW[SIPXVIEW.length-1].t)}${SIPXVIEW[0].t.getFullYear()} &middot; ${badge}`;
   // statistika za danes (po izbrani ločljivosti)
   const sd=(a,b)=>a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();
-  const today=SIPXVIEW.filter(x=>sd(x.t,d));
+  const today=SIPXVIEW.filter(x=>sd(x.t,d) && (sipxBlok==null || blockAt(x.t)===sipxBlok));
   if(today.length){
     const ps=today.map(x=>x.p), mn=Math.min(...ps),mx=Math.max(...ps),av=ps.reduce((a,b)=>a+b,0)/ps.length;
     const hh=t=>String(t.getHours()).padStart(2,"0")+":"+String(t.getMinutes()).padStart(2,"0");
-    stats.innerHTML=st("danes povpr.",(av/10).toFixed(2)+" c€")+
+    stats.innerHTML=st(sipxBlok==null?"danes povpr.":`danes povpr. (blok ${sipxBlok})`,(av/10).toFixed(2)+" c€")+
       st("min",(mn/10).toFixed(2)+" c€ @"+hh(today.find(x=>x.p===mn).t))+
       st("max",(mx/10).toFixed(2)+" c€ @"+hh(today.find(x=>x.p===mx).t))+
       st("ločljivost",priceRes==="hourly"?"urno (GEN-I)":"15-min (trg)");
-  } else stats.innerHTML="";
+  } else stats.innerHTML = sipxBlok!=null ? `<div class="note" style="margin:0">Danes ni ur bloka ${sipxBlok}.</div>` : "";
   let nowIdx=-1; for(let i=0;i<SIPXVIEW.length;i++){ if(SIPXVIEW[i].t<=d) nowIdx=i; else break; }
   if(WAVE.mode==="off") drawSipxView();   // sicer graf riše razkrivanje samo (brez preblika pravih cen)
   renderList(nowIdx);
@@ -1185,7 +1198,7 @@ function drawSipxView(){
   if(!SIPXVIEW.length) return;
   const d=nowLjubljana();
   const data=viewData();
-  drawChart("sipxChart", data, d, {hours: sipxView==="td", blocks:true});
+  drawChart("sipxChart", data, d, {hours: sipxView==="td", blocks:true, only:sipxBlok});
   document.querySelectorAll("#sipxToggle .tab").forEach(b=>b.classList.toggle("on", b.dataset.v===sipxView));
 }
 function drawChart(chartId,data,nowT,opts){
@@ -1198,7 +1211,9 @@ function drawChart(chartId,data,nowT,opts){
   let nowIdx=-1; for(let i=0;i<N;i++){ if(data[i].t<=nowT) nowIdx=i; else break; }
   const sameDay=(a,b)=>a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();
   const showNow = nowIdx>=0 && sameDay(data[nowIdx].t,nowT);
-  const ps=data.map(x=>x.p), mn=Math.min(...ps), mx=Math.max(...ps);
+  const vis = i => opts.only==null || blockAt(data[i].t)===opts.only;    // prikaz samo enega bloka
+  const psV=data.filter((x,i)=>vis(i)).map(x=>x.p), ps=psV.length?psV:data.map(x=>x.p);
+  const mn=Math.min(...ps), mx=Math.max(...ps);
   const lo=Math.min(0,mn), hi=Math.max(mx,1), rng=(hi-lo)||1;
   const narrow = (window.innerWidth||1000)<=560;         // na telefonu naj bo graf višji
   const BS = opts.blocks ? 16 : 0;                        // višina traku blokov pod stolpci
@@ -1214,7 +1229,7 @@ function drawChart(chartId,data,nowT,opts){
   for(let i=0;i<N;i++){
     const p=data[i].p, x=pl+bw*i, t=data[i].t;
     const y0=pt+ih-(Math.max(0,p)-lo)/rng*ih, y1=pt+ih-(Math.min(0,p)-lo)/rng*ih;
-    bars+=`<rect x="${x.toFixed(2)}" y="${Math.min(y0,y1).toFixed(2)}" width="${Math.max(bw*0.92,0.6).toFixed(2)}" height="${(Math.abs(y1-y0)||1).toFixed(2)}" fill="${priceColor(p,lo,hi)}"><title>${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")} ${f2(t)} \u2013 ${p.toFixed(1)} €/MWh</title></rect>`;
+    if(vis(i)) bars+=`<rect x="${x.toFixed(2)}" y="${Math.min(y0,y1).toFixed(2)}" width="${Math.max(bw*0.92,0.6).toFixed(2)}" height="${(Math.abs(y1-y0)||1).toFixed(2)}" fill="${priceColor(p,lo,hi)}"><title>${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")} ${f2(t)} \u2013 ${p.toFixed(1)} €/MWh</title></rect>`;
     if(t.getMinutes()===0 && t.getHours()===0){
       axis+=`<line x1="${x.toFixed(2)}" y1="${pt}" x2="${x.toFixed(2)}" y2="${pt+ih}" stroke="#33404f" stroke-width="1"/>`;
       const lx=Math.min(pl+iw-2, x+bw*48);
@@ -1241,8 +1256,9 @@ function drawChart(chartId,data,nowT,opts){
     for(let i=0;i<N;){
       const b=blockAt(data[i].t); let j=i; while(j+1<N && blockAt(data[j+1].t)===b) j++;
       const x0=pl+bw*i, w=bw*(j-i+1)-Math.min(bw*0.08,1.5);
-      blkStrip+=`<rect x="${x0.toFixed(2)}" y="${y}" width="${Math.max(w,0.6).toFixed(2)}" height="${hgt}" rx="2" fill="${COL[b]}"><title>blok ${b}</title></rect>`;
-      if(w>=18) blkStrip+=`<text x="${(x0+w/2).toFixed(2)}" y="${y+hgt-2.5}" fill="${DARKTXT[b]?"#111":"#fff"}" font-size="11" font-weight="700" text-anchor="middle" font-family="JetBrains Mono">${b}</text>`;
+      const op=(opts.only==null||opts.only===b)?1:0.18;
+      blkStrip+=`<rect x="${x0.toFixed(2)}" y="${y}" width="${Math.max(w,0.6).toFixed(2)}" height="${hgt}" rx="2" fill="${COL[b]}" opacity="${op}"><title>blok ${b}</title></rect>`;
+      if(w>=18 && op===1) blkStrip+=`<text x="${(x0+w/2).toFixed(2)}" y="${y+hgt-2.5}" fill="${DARKTXT[b]?"#111":"#fff"}" font-size="11" font-weight="700" text-anchor="middle" font-family="JetBrains Mono">${b}</text>`;
       i=j+1;
     }
   }
@@ -1257,10 +1273,13 @@ function f2(t){ return ["ned","pon","tor","sre","čet","pet","sob"][t.getDay()];
 function renderList(nowIdx){
   const list=document.getElementById("sipxList");
   const fins=SIPXVIEW.map(x=>allInFor(x.p, blockAt(x.t))); // dejanska cena na rezino (po izbrani ločljivosti)
-  // barve in dolžine po KONČNI ceni (kar dejansko plačaš), ne po borzni
-  const flo=Math.min(...fins), fhi=Math.max(...fins, flo+0.1);
+  const vidi=i=>sipxBlok==null || blockAt(SIPXVIEW[i].t)===sipxBlok;
+  // barve in dolžine po KONČNI ceni (kar dejansko plačaš), ne po borzni; pri enem bloku po njegovih urah
+  const finsV=fins.filter((f,i)=>vidi(i)), fz=finsV.length?finsV:fins;
+  const flo=Math.min(...fz), fhi=Math.max(...fz, flo+0.1);
   let html='<div class="shead"><div>ura</div><div>blok</div><div>končna<br>c€/kWh</div><div>SIPX<br>€/MWh</div></div>', lastDay=null;
   for(let i=0;i<SIPXVIEW.length;i++){
+    if(!vidi(i)) continue;
     const it=SIPXVIEW[i], t=it.t, dk=`${t.getDate()}.${t.getMonth()+1}.`;
     if(dk!==lastDay){ html+=`<div style="padding:9px 8px 3px;font-family:var(--mono);font-size:13px;color:var(--faint)">${f2(t)} ${dk}</div>`; lastDay=dk; }
     const isNow=(i===nowIdx), isPast=(i<nowIdx), fin=fins[i];

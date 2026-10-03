@@ -37,6 +37,13 @@
 
   /* HERO */
   .hero{position:relative;overflow:hidden}
+  /* zložljive kartice: vidi se le naslov, klik ga razpre ali zapre */
+  .fold > h2{cursor:pointer;user-select:none;-webkit-user-select:none;display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-right:22px;position:relative}
+  .fold > h2::after{content:"\25BE";position:absolute;right:0;top:50%;transform:translateY(-50%);color:var(--faint);font-size:14px;transition:transform .15s}
+  .fold.zaprto > h2::after{transform:translateY(-50%) rotate(-90deg)}
+  .fold.zaprto > h2{margin-bottom:0}
+  .fold.zaprto > :not(h2){display:none !important}
+  .fold.zaprto{padding-top:14px;padding-bottom:14px}
   .hero .row{display:flex;gap:24px;align-items:center;flex-wrap:wrap}
   .disc{width:150px;height:150px;border-radius:50%;flex:0 0 auto;display:flex;flex-direction:column;
     align-items:center;justify-content:center;color:#0d1014;font-family:var(--display);
@@ -269,36 +276,8 @@
 
   <div class="grid">
 
-    <!-- HERO -->
-    <section class="panel hero" id="hero">
-      <div class="row">
-        <div class="disc" id="disc"><span class="bk">BLOK</span><span class="bn" id="discNum">–</span></div>
-        <div class="meta">
-          <div class="name" id="blkName">Nalagam…</div>
-          <div class="ctx" id="blkCtx"></div>
-          <div class="chips" id="chips"></div>
-          <div id="b27box" class="b27"></div>
-        </div>
-      </div>
-      <div class="nextbar" id="nextbar"></div>
-      <div class="note" id="schednote"></div>
-    </section>
-
-    <!-- DAY STRIP -->
-    <section class="panel">
-      <h2>Potek blokov danes</h2>
-      <div class="strip" id="strip"></div>
-      <div class="ticks" id="ticks"></div>
-      <div id="strip27wrap">
-        <div class="striplab">Po pravilih 2027 <span>(za špice moči)</span></div>
-        <div class="strip" id="strip27"></div>
-        <div class="ticks" id="ticks27"></div>
-      </div>
-    </section>
-
-    <!-- ENERGY NOW -->
     <!-- SIPX -->
-    <section class="panel">
+    <section class="panel" id="sipxPanel">
       <h2>SIPX day-ahead &middot; borzna cena energije <span id="sipxRange" style="color:var(--faint);font-family:var(--mono);font-size:11px"></span><span id="sipxCheck" style="color:var(--b2);font-family:var(--mono);font-size:11px"></span></h2>
       <div id="sipxWarn" style="display:none"></div>
       <div id="tmrNotifyBar" style="margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -325,7 +304,37 @@
       </details>
     </section>
 
-    <section class="panel">
+    <!-- HERO -->
+    <section class="panel hero" id="hero">
+      <h2 id="heroTitle">Trenutni blok</h2>
+      <div class="row">
+        <div class="disc" id="disc"><span class="bk">BLOK</span><span class="bn" id="discNum">–</span></div>
+        <div class="meta">
+          <div class="name" id="blkName">Nalagam…</div>
+          <div class="ctx" id="blkCtx"></div>
+          <div class="chips" id="chips"></div>
+          <div id="b27box" class="b27"></div>
+        </div>
+      </div>
+      <div class="nextbar" id="nextbar"></div>
+      <div class="note" id="schednote"></div>
+    </section>
+
+    <!-- DAY STRIP -->
+    <section class="panel" id="blokiPanel">
+      <h2>Potek blokov danes</h2>
+      <div class="strip" id="strip"></div>
+      <div class="ticks" id="ticks"></div>
+      <div id="strip27wrap">
+        <div class="striplab">Po pravilih 2027 <span>(za špice moči)</span></div>
+        <div class="strip" id="strip27"></div>
+        <div class="ticks" id="ticks27"></div>
+      </div>
+    </section>
+
+    <!-- ENERGY NOW -->
+
+    <section class="panel" id="enowPanel">
       <h2>Cena energije zdaj <span style="color:var(--energy);font-family:var(--mono);font-size:11px">SIPX day-ahead</span></h2>
       <div class="enow" id="enow">
       </div>
@@ -340,7 +349,7 @@
     </section>
 
     <!-- LADDER -->
-    <section class="panel">
+    <section class="panel" id="tarifePanel">
       <h2>Tarifne postavke omrežnine &middot; vsi bloki <span id="ladYear" style="color:var(--faint);font-family:var(--mono);font-size:11px"></span></h2>
       <div class="ladder" id="ladder"></div>
       <div class="legend">
@@ -350,13 +359,13 @@
       </div>
     </section>
     <!-- FORECAST -->
-    <section class="panel">
+    <section class="panel" id="napovedPanel">
       <h2>Napoved tendence cen &middot; po vremenu v regiji</h2>
       <div class="fc" id="fc"></div>
       <div class="note" id="fcnote"></div>
     </section>
 
-    <section class="panel">
+    <section class="panel" id="vremePanel">
       <h2>Vreme Zagrajec &middot; 15 dni &middot; večmodelni ansambel</h2>
       <div id="wxMeta" class="note" style="margin-top:0;margin-bottom:10px"></div>
       <div class="wx15" id="wx15"></div>
@@ -375,7 +384,7 @@
       </div>
     </section>
 
-    <section class="panel">
+    <section class="panel" id="evPanel">
       <h2>Optimalno polnjenje treh vozil</h2>
       <div class="evcars" id="evCars"></div>
       <div class="row" style="margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -412,7 +421,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-03 19:47</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-03 20:15</span>
     </div>
 
   </div>
@@ -561,6 +570,9 @@ function renderCore(){
   const disc=document.getElementById("disc");
   disc.style.background=COL[b]; disc.style.color=DARKTXT[b]?"#0d1014":"#fff";
   document.getElementById("discNum").textContent=b;
+  { const ht=document.getElementById("heroTitle");
+    if(ht) ht.innerHTML=`Trenutni blok <span class="evdot" style="background:${COL[b]};width:12px;height:12px"></span>`+
+      `<span style="color:var(--ink)">${b}</span> <span style="text-transform:none;letter-spacing:0;font-weight:400">${TARIFF[b].name}</span>`; }
   document.getElementById("blkName").textContent="Blok "+b+" \u2013 "+TARIFF[b].name;
   document.getElementById("blkCtx").innerHTML=`<b>${SEZ[sez]}</b> &middot; <b>${DAN[dt]}</b>`;
   // chips
@@ -2787,6 +2799,27 @@ renderSplacilo();
 loadRacuni().then(()=>{ renderEvLim(); if(SIPXVIEW.length) renderSIPX(); });
 setInterval(loadRacuni, 1000*60*60);
 setInterval(loadWeather15, 1000*60*60*3);
+
+/* ============================================================
+   ZLOŽLJIVE KARTICE: SIPX je vedno odprta na vrhu, ostale so privzeto zaprte (le naslov).
+   Klik na naslov kartico razpre ali zapre; izbira se zapomni v tem brskalniku.
+   ============================================================ */
+(function initFold(){
+  let st={}; try{ st=JSON.parse(localStorage.getItem("foldV1")||"{}"); }catch(e){}
+  document.querySelectorAll("section.panel").forEach(sec=>{
+    if(sec.id==="sipxPanel" || !sec.id) return;
+    const h=sec.querySelector(":scope > h2"); if(!h) return;
+    sec.classList.add("fold");
+    if(!st[sec.id]) sec.classList.add("zaprto");
+    h.addEventListener("click", ev=>{
+      if(ev.target.closest("a,button,input,select")) return;
+      sec.classList.toggle("zaprto");
+      st[sec.id]=!sec.classList.contains("zaprto");
+      try{ localStorage.setItem("foldV1", JSON.stringify(st)); }catch(e){}
+    });
+  });
+})();
+
 </script>
 </body>
 </html>

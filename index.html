@@ -412,7 +412,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-03 15:30</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-03 19:47</span>
     </div>
 
   </div>
@@ -1247,8 +1247,11 @@ function drawChart(chartId,data,nowT,opts){
     if(vis(i)) bars+=`<rect x="${x.toFixed(2)}" y="${Math.min(y0,y1).toFixed(2)}" width="${Math.max(bw*0.92,0.6).toFixed(2)}" height="${(Math.abs(y1-y0)||1).toFixed(2)}" fill="${priceColor(p,lo,hi)}"><title>${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")} ${f2(t)} \u2013 ${p.toFixed(1)} €/MWh</title></rect>`;
     if(t.getMinutes()===0 && t.getHours()===0){
       axis+=`<line x1="${x.toFixed(2)}" y1="${pt}" x2="${x.toFixed(2)}" y2="${pt+ih}" stroke="#33404f" stroke-width="1"/>`;
-      const lx=Math.min(pl+iw-2, x+bw*48);
       const sameCal=(a,b)=>a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();
+      // sredina dneva iz DEJANSKEGA števila stolpcev tega dne (urno 24, 15-min 96, delni dan manj);
+      // prej je bilo fiksno 48 stolpcev, kar je pri urnem prikazu oba napisa porinilo na desni rob
+      let nDan=0; for(let j=i; j<N && sameCal(data[j].t,t); j++) nDan++;
+      const lx=Math.min(pl+iw-2, x+bw*nDan/2);
       const tmr=new Date(nowT); tmr.setDate(nowT.getDate()+1);
       let big=null;
       if(sameCal(t,nowT)) big="DANES"; else if(sameCal(t,tmr)) big="JUTRI";

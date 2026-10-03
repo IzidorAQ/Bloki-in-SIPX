@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Omrežninski semafor 2027 + SIPX</title>
+<title>Elektrika Zagrajec · SIPX, bloki, polnjenje, računi</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -266,8 +266,8 @@
 
   <header class="top">
     <div>
-      <div class="eyebrow">Omrežnina &middot; časovni bloki 2027</div>
-      <h1>Omrežninski semafor</h1>
+      <div class="eyebrow">SIPX &middot; omrežninski bloki &middot; polnjenje &middot; računi</div>
+      <h1>Elektrika Zagrajec</h1>
     </div>
     <div>
       <div class="clock" id="clock">&nbsp;</div>
@@ -280,10 +280,6 @@
     <section class="panel" id="sipxPanel">
       <h2>SIPX day-ahead &middot; borzna cena energije <span id="sipxRange" style="color:var(--faint);font-family:var(--mono);font-size:11px"></span><span id="sipxCheck" style="color:var(--b2);font-family:var(--mono);font-size:11px"></span></h2>
       <div id="sipxWarn" style="display:none"></div>
-      <div id="tmrNotifyBar" style="margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <button class="tab" id="tmrNotifyBtn" onclick="toggleTomorrowNotify()">Obvesti me, ko so cene za jutri na voljo</button>
-        <span id="tmrNotifyStat" style="font-size:12px;color:var(--faint)"></span>
-      </div>
       <div class="stats" id="sipxStats"></div>
       <div class="tabs" id="sipxToggle">
         <button class="tab on" data-v="td" onclick="setSipxView('td')">Danes in jutri</button>
@@ -423,7 +419,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-03 21:04</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-03 21:30</span>
     </div>
 
   </div>
@@ -707,33 +703,6 @@ function card(lab,v,u,total){
     `<div class="v">${v}</div><div class="u">${u}</div></div>`;
 }
 /* ----- Obvestila ob spremembi cene ----- */
-let tmrNotifyOn=false, hadTomorrow=null;
-function updateTmrNotifyUI(){
-  const btn=document.getElementById("tmrNotifyBtn"); if(!btn) return;
-  btn.classList.toggle("on",tmrNotifyOn);
-  btn.textContent=tmrNotifyOn?"Obveščanje vklopljeno":"Obvesti me, ko so cene za jutri na voljo";
-  const stat=document.getElementById("tmrNotifyStat");
-  if(stat) stat.textContent = tmrNotifyOn
-    ? (haveTomorrow()?"Jutrišnje cene so že tu.":"Stran preverja pogosteje, dokler jih ne dobi. Mora ostati odprta.")
-    : "";
-}
-function toggleTomorrowNotify(){
-  if(!("Notification" in window)){ const s=document.getElementById("tmrNotifyStat"); if(s) s.textContent="Brskalnik ne podpira obvestil."; return; }
-  if(tmrNotifyOn){ tmrNotifyOn=false; updateTmrNotifyUI(); return; }
-  Notification.requestPermission().then(p=>{
-    if(p==="granted"){ tmrNotifyOn=true; hadTomorrow=haveTomorrow(); updateTmrNotifyUI(); }
-    else { const s=document.getElementById("tmrNotifyStat"); if(s) s.textContent="Obvestila niso dovoljena v nastavitvah brskalnika."; }
-  });
-}
-// zazna prehod "se ni imel jutri" -> "zdaj ima jutri" in obvesti, ce je uporabnik to vklopil
-function checkTomorrowNotify(){
-  const now=haveTomorrow();
-  if(tmrNotifyOn && hadTomorrow===false && now===true){
-    try{ new Notification("Cene za jutri so na voljo",{body:"SIPX cene za jutri so objavljene in prikazane.",tag:"sipx-jutri"}); }catch(e){}
-  }
-  hadTomorrow=now;
-  updateTmrNotifyUI();
-}
 let notifyOn=false, priceState=null;
 function setAlertStat(t){ const e=document.getElementById("alertStat"); if(e) e.textContent=t; }
 function updateAlertUI(){
@@ -1033,7 +1002,6 @@ function ingestSIPX(j, isSeed){
   renderSIPX();
   if(!isSeed && typeof computeForecast==="function") computeForecast(); // prekalibriraj z živimi cenami, brez novega klica na vreme
   saveSIPXCache();
-  checkTomorrowNotify();
 }
 function ingestPaste(){
   const ta=document.getElementById("sipxPaste");
@@ -2639,7 +2607,6 @@ function renderEVGantt(containerId, future, results){
 /* velikost pisave: 5 stopenj, izbira se ohrani med obiski */
 renderCore();
 updateAlertUI();
-updateTmrNotifyUI();
 startWave();
 renderEVCars();
 setInterval(renderCore,1000); // sekundna ura + preračun bloka + cene + preverjanje praga

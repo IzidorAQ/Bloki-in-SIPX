@@ -137,6 +137,10 @@
   .srow .sbarwrap{position:absolute;left:0;right:0;bottom:0;height:7px;z-index:0;display:block;pointer-events:none}
   .srow .sbar{height:100%;border-radius:0 4px 4px 0;min-width:5px}
   .srow.now .sbarwrap{height:9px}
+  #sipxList .srow,#sipxList .shead{grid-template-columns:minmax(0,0.9fr) 30px minmax(0,1.1fr) minmax(0,1fr)}
+  #sipxList .shead div:nth-child(2){text-align:center}
+  .sblk{display:inline-flex;align-items:center;justify-content:center;width:22px;height:20px;border-radius:5px;
+    font-family:var(--mono);font-size:12px;font-weight:700}
 
   /* forecast */
   .fc{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
@@ -407,7 +411,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-03 14:35</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-03 14:52</span>
     </div>
 
   </div>
@@ -1038,10 +1042,11 @@ function waveSpot(i,t){ const p=i*0.85-t*2.0; return 70+85*Math.sin(p*0.42)+35*M
 function waveRange(){ return [allInFor(-70,5), allInFor(210,2)]; }
 function waveRowsHTML(n){
   const d=nowLjubljana();
-  let h='<div class="shead"><div>ura</div><div>končna<br>c€/kWh</div><div>SIPX<br>€/MWh</div></div>';
+  let h='<div class="shead"><div>ura</div><div>blok</div><div>končna<br>c€/kWh</div><div>SIPX<br>€/MWh</div></div>';
   h+=`<div style="padding:9px 8px 3px;font-family:var(--mono);font-size:13px;color:var(--faint)">${f2(d)} ${d.getDate()}.${d.getMonth()+1}.</div>`;
   for(let i=0;i<n;i++){
     h+=`<div class="srow" data-h="${i}"><div class="stime">${String(i).padStart(2,"0")}:00</div>`+
+       (()=>{ const B=blockAt(new Date(d.getFullYear(),d.getMonth(),d.getDate(),i,0,0)), DIM=""; return `<div style="text-align:center"><span class="sblk" style="background:${COL[B]};color:${DARKTXT[B]?"#111":"#fff"}${DIM}">${B}</span></div>`; })()+
        `<div class="sfin" style="color:var(--energy)">0.0</div>`+
        `<div class="sprice" style="color:var(--ink)">0</div>`+
        `<div class="sbarwrap"><div class="sbar" style="width:2%;background:var(--b5)"></div></div></div>`;
@@ -1069,14 +1074,14 @@ function waveChart(t){
   const d=nowLjubljana(), data=[];
   for(let i=0;i<24;i++){ const x=new Date(d.getFullYear(),d.getMonth(),d.getDate(),i,0,0);
     data.push({t:x,p:waveSpot(i,t)}); }
-  drawChart("sipxChart",data,new Date(1970,0,1),{hours:true});
+  drawChart("sipxChart",data,new Date(1970,0,1),{hours:true, blocks:true});
 }
 // med razkritjem: prvih "locked" stolpcev je pravih, ostali še valovijo
 function waveChartReveal(t,frac){
   const real=viewData(); if(!real.length) return;
   const n=real.length, lock=Math.floor(n*frac);
   const data=real.map((x,i)=> i<lock ? x : {t:x.t, p:waveSpot(i,t)});
-  drawChart("sipxChart", data, nowLjubljana(), {hours: sipxView==="td"});
+  drawChart("sipxChart", data, nowLjubljana(), {hours: sipxView==="td", blocks:true});
 }
 function waveTick(now){
   if(WAVE.mode==="off") return;
@@ -1180,7 +1185,7 @@ function drawSipxView(){
   if(!SIPXVIEW.length) return;
   const d=nowLjubljana();
   const data=viewData();
-  drawChart("sipxChart", data, d, {hours: sipxView==="td"});
+  drawChart("sipxChart", data, d, {hours: sipxView==="td", blocks:true});
   document.querySelectorAll("#sipxToggle .tab").forEach(b=>b.classList.toggle("on", b.dataset.v===sipxView));
 }
 function drawChart(chartId,data,nowT,opts){
@@ -1196,7 +1201,8 @@ function drawChart(chartId,data,nowT,opts){
   const ps=data.map(x=>x.p), mn=Math.min(...ps), mx=Math.max(...ps);
   const lo=Math.min(0,mn), hi=Math.max(mx,1), rng=(hi-lo)||1;
   const narrow = (window.innerWidth||1000)<=560;         // na telefonu naj bo graf višji
-  const W=1000,H=narrow?380:240,pl=8,prr=42,pt=16,pb=opts.hours?54:34, iw=W-pl-prr, ih=H-pt-pb;
+  const BS = opts.blocks ? 16 : 0;                        // višina traku blokov pod stolpci
+  const W=1000,H=narrow?380:240,pl=8,prr=42,pt=16,pb=(opts.hours?54:34)+BS, iw=W-pl-prr, ih=H-pt-pb;
   const bw=iw/N;
   const dayY=opts.hours?H-10:H-11;
   let bars="",axis="",grid="";
@@ -1224,8 +1230,20 @@ function drawChart(chartId,data,nowT,opts){
       }
     }
     if(opts.hours && t.getMinutes()===0 && t.getHours()%3===0){
-      axis+=`<line x1="${x.toFixed(2)}" y1="${pt+ih}" x2="${x.toFixed(2)}" y2="${(pt+ih+4).toFixed(2)}" stroke="#5a6573" stroke-width="1"/>`;
-      axis+=`<text x="${x.toFixed(2)}" y="${(pt+ih+16).toFixed(2)}" fill="#aeb9c7" font-size="13" text-anchor="middle" font-family="JetBrains Mono">${t.getHours()}</text>`;
+      axis+=`<line x1="${x.toFixed(2)}" y1="${pt+ih+BS}" x2="${x.toFixed(2)}" y2="${(pt+ih+BS+4).toFixed(2)}" stroke="#5a6573" stroke-width="1"/>`;
+      axis+=`<text x="${x.toFixed(2)}" y="${(pt+ih+BS+16).toFixed(2)}" fill="#aeb9c7" font-size="13" text-anchor="middle" font-family="JetBrains Mono">${t.getHours()}</text>`;
+    }
+  }
+  // trak omrežninskih blokov: zaporedne enake bloke združimo, številko napišemo, kjer je dovolj prostora
+  let blkStrip="";
+  if(BS){
+    const y=pt+ih+2, hgt=BS-3;
+    for(let i=0;i<N;){
+      const b=blockAt(data[i].t); let j=i; while(j+1<N && blockAt(data[j+1].t)===b) j++;
+      const x0=pl+bw*i, w=bw*(j-i+1)-Math.min(bw*0.08,1.5);
+      blkStrip+=`<rect x="${x0.toFixed(2)}" y="${y}" width="${Math.max(w,0.6).toFixed(2)}" height="${hgt}" rx="2" fill="${COL[b]}"><title>blok ${b}</title></rect>`;
+      if(w>=18) blkStrip+=`<text x="${(x0+w/2).toFixed(2)}" y="${y+hgt-2.5}" fill="${DARKTXT[b]?"#111":"#fff"}" font-size="11" font-weight="700" text-anchor="middle" font-family="JetBrains Mono">${b}</text>`;
+      i=j+1;
     }
   }
   let nowMark="";
@@ -1233,7 +1251,7 @@ function drawChart(chartId,data,nowT,opts){
     nowMark=`<line x1="${x}" y1="${pt-3}" x2="${x}" y2="${pt+ih}" stroke="#fff" stroke-width="1.5"/>`+
             `<text x="${x}" y="${pt-5}" fill="#fff" font-size="14" text-anchor="middle" font-family="JetBrains Mono">zdaj</text>`; }
   const zeroY=pt+ih-(0-lo)/rng*ih;
-  chart.innerHTML=`<svg viewBox="0 0 ${W} ${H}">${grid}${bars}<line x1="${pl}" y1="${zeroY}" x2="${pl+iw}" y2="${zeroY}" stroke="#3a4452" stroke-width="1"/>${nowMark}${axis}<text x="${pl+iw+5}" y="${pt-2}" fill="#aeb9c7" font-size="14" font-family="JetBrains Mono">€/MWh</text></svg>`;
+  chart.innerHTML=`<svg viewBox="0 0 ${W} ${H}">${grid}${bars}<line x1="${pl}" y1="${zeroY}" x2="${pl+iw}" y2="${zeroY}" stroke="#3a4452" stroke-width="1"/>${blkStrip}${nowMark}${axis}<text x="${pl+iw+5}" y="${pt-2}" fill="#aeb9c7" font-size="14" font-family="JetBrains Mono">€/MWh</text></svg>`;
 }
 function f2(t){ return ["ned","pon","tor","sre","čet","pet","sob"][t.getDay()]; }
 function renderList(nowIdx){
@@ -1241,7 +1259,7 @@ function renderList(nowIdx){
   const fins=SIPXVIEW.map(x=>allInFor(x.p, blockAt(x.t))); // dejanska cena na rezino (po izbrani ločljivosti)
   // barve in dolžine po KONČNI ceni (kar dejansko plačaš), ne po borzni
   const flo=Math.min(...fins), fhi=Math.max(...fins, flo+0.1);
-  let html='<div class="shead"><div>ura</div><div>končna<br>c€/kWh</div><div>SIPX<br>€/MWh</div></div>', lastDay=null;
+  let html='<div class="shead"><div>ura</div><div>blok</div><div>končna<br>c€/kWh</div><div>SIPX<br>€/MWh</div></div>', lastDay=null;
   for(let i=0;i<SIPXVIEW.length;i++){
     const it=SIPXVIEW[i], t=it.t, dk=`${t.getDate()}.${t.getMonth()+1}.`;
     if(dk!==lastDay){ html+=`<div style="padding:9px 8px 3px;font-family:var(--mono);font-size:13px;color:var(--faint)">${f2(t)} ${dk}</div>`; lastDay=dk; }
@@ -1251,6 +1269,7 @@ function renderList(nowIdx){
     const tlab=isNow?"Zdaj":`${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`;
     html+=`<div class="srow${isNow?" now":""}"${isNow?' id="sipxNowRow"':''} data-p="${Math.round(it.p)}" data-f="${fin.toFixed(1)}" data-w="${w.toFixed(1)}" data-c="${col}" data-h="${t.getHours()}">`+
       `<div class="stime">${tlab}</div>`+
+      (()=>{ const B=blockAt(t), DIM=isPast?";opacity:.45":""; return `<div style="text-align:center"><span class="sblk" style="background:${COL[B]};color:${DARKTXT[B]?"#111":"#fff"}${DIM}">${B}</span></div>`; })()+
       `<div class="sfin" style="color:${isPast?'var(--faint)':'var(--energy)'}">${fin.toFixed(1)}</div>`+
       `<div class="sprice" style="color:${isPast?'var(--faint)':'var(--ink)'}">${Math.round(it.p)}</div>`+
       `<div class="sbarwrap"><div class="sbar" style="width:${w.toFixed(1)}%;background:${col}"></div></div></div>`;

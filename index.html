@@ -394,10 +394,6 @@
         <span style="font-size:14px;color:var(--mut)">c€/kWh</span>
       </div>
       <div class="row" id="evLimRow" style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"></div>
-      <details id="splDet" style="margin-top:10px">
-        <summary style="cursor:pointer;font-size:14px;color:var(--mut)">Ali se splača dvigniti obračunsko moč?</summary>
-        <div id="splBox" style="margin-top:8px"></div>
-      </details>
       <div class="row" style="margin-top:8px;display:flex;align-items:center;gap:8px">
         <input id="ev_move" type="checkbox" style="width:18px;height:18px">
         <label for="ev_move" style="font-size:14px;color:var(--mut)">Med dnevom lahko avte prestavljam: Hyundai na 11 kW polnilnico, tisti z nje pa na sproščeno 2,5 kW vtičnico</label>
@@ -420,8 +416,14 @@
       <div class="note" id="evnote">Uporablja že naložene cene (danes, in jutri, ko so objavljene) ter dejansko tarifno postavko omrežnine glede na uro. Tri polnilna mesta delujejo hkrati: 11 kW polnilnica, 2,5 kW vtičnica in 2 kW vtičnica na 20 m kablu. Vsako mesto polni en avto naenkrat, med dnevom pa se lahko preda naprej (ko je BMW poln, gre 11 kW na naslednjega). Razporeja se po četrturah, zato avto, ki konča sredi ure, mesto takoj sprosti naslednjemu. Nad 90 % se polnjenje upočasni (uravnoteženje celic), zato avto takrat prepusti 11 kW polnilnico drugemu in dokonča na vtičnici; privzeti meji sta ocena in ju lahko popraviš v kodi (taperFrom, taperKw). Razpored gleda naprej: avto, ki bi pri svoji največji moči komaj ujel konec poceni okna, dobi hitro polnilnico prej, drugi pa medtem polnijo počasneje na vtičnicah, da do konca okna ostanejo zasedena vsa mesta. Avto sicer ostane na svojem mestu, dokler se premik ne izplača. Privzeti izkoristek AC polnjenja je 90 % (izgube v polnilniku in bateriji). BMW in MG stojita v dosegu 11 kW polnilnice, zato je predaja med njima le preklop kabla. Da pride Hyundai na polnilnico, se mora eden od njiju umakniti na Hyundaijevo mesto; to je preparkiranje dveh avtov, med katerim ne polnita (ocena: 5 minut). Aplikacija preizkusi vse smiselne trenutke za tako zamenjavo in ti pove, ali se splača. Razpored oceni tako, da vsak kWh ovrednoti po tvojem pragu cene. Druga kljukica doda 2 kW vtičnico na 20 m kablu, ki doseže katerokoli mesto. Kapaciteto baterij, moč polnjenja in vire lahko po potrebi prilagodiš v kodi (EV_CARS, POINTS).</div>
     </section>
 
+    <!-- ALI SE SPLAČA DVIGNITI MOČ -->
+    <section class="panel" id="splPanel">
+      <h2>Ali se splača dvigniti obračunsko moč?</h2>
+      <div id="splBox"></div>
+    </section>
+
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-03 20:15</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-03 20:26</span>
     </div>
 
   </div>

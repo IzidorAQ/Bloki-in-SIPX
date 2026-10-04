@@ -267,9 +267,15 @@
    "manjkaCen": 528,
    "oznaka": "konec",
    "stMeritev": 2880,
+   "cene": {
+    "ur": 192,
+    "urSPorabo": 720,
+    "povprBorza": 26.7,
+    "energijaNaKwh": 1.05
+   },
    "izmerjenoDo": "30. 9.",
    "nepopolno": true,
-   "posodobljeno": "2026-10-04T07:53:40.133Z"
+   "posodobljeno": "2026-10-04T08:14:03.229Z"
   },
   "2026-10": {
    "mesec": "2026-10",
@@ -339,12 +345,18 @@
    "manjkaCen": 0,
    "oznaka": "konec",
    "stMeritev": 288,
+   "cene": {
+    "ur": 72,
+    "urSPorabo": 72,
+    "povprBorza": 74.2,
+    "energijaNaKwh": 8.91
+   },
    "izmerjenoDo": "3. 10.",
-   "posodobljeno": "2026-10-04T07:53:40.154Z"
+   "posodobljeno": "2026-10-04T08:14:03.249Z"
   }
  },
  "oznakaZamik": 900000,
- "posodobljeno": "2026-10-04T07:53:40.154Z",
+ "posodobljeno": "2026-10-04T08:14:03.249Z",
  "dostopnost": {
   "2026-10-01": {
    "naVoljo": "2026-10-02T15:50:55.865Z"

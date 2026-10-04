@@ -7,7 +7,34 @@ const path = require("path");
 
 const OUT = path.join(process.cwd(), "cene.json");
 const TZ = "Europe/Ljubljana";
-const KEEP_BACK = 10;   // dni zgodovine
+// ---- TRAJNI ARHIV CEN: mapa arhiv-cen, po ena datoteka na mesec (ljubljanski čas). ----
+// Objavljena borzna cena se ne spreminja, zato jo shranimo enkrat in je nikoli ne brišemo.
+// cene.json (ki ga nalaga stran) ostane kratek; arhiv služi izračunu računov za cele mesece.
+const ARH_DIR = require("path").join(process.cwd(), "arhiv-cen");
+const arhMesec = s => { const d = new Date(new Date(s*1000).toLocaleString("en-US", { timeZone: "Europe/Ljubljana" }));
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; };
+function arhivBeri(k){
+  try { const j = JSON.parse(require("fs").readFileSync(require("path").join(ARH_DIR, k + ".json"), "utf8"));
+        return new Map((j.unix_seconds||[]).map((s,i) => [s, j.price[i]])); } catch (e) { return new Map(); }
+}
+function arhivDodaj(pari){                       // pari: iterable [unix_s, EUR/MWh]
+  const fs = require("fs"), path = require("path"), per = {};
+  for (const [s, p] of pari){ if (p == null || isNaN(p)) continue; const k = arhMesec(s); (per[k] = per[k] || []).push([s, p]); }
+  let novih = 0;
+  Object.keys(per).forEach(k => {
+    const m = arhivBeri(k); let n = 0;
+    per[k].forEach(([s, p]) => { if (!m.has(s)){ m.set(s, p); n++; } });
+    if (!n) return;
+    const ks = [...m.keys()].sort((a, b) => a - b);
+    fs.mkdirSync(ARH_DIR, { recursive: true });
+    fs.writeFileSync(path.join(ARH_DIR, k + ".json"),
+      JSON.stringify({ unix_seconds: ks, price: ks.map(s => m.get(s)), unit: "EUR / MWh", bzn: "SI" }));
+    novih += n;
+  });
+  return novih;
+}
+
+const KEEP_BACK = 10;   // dni zgodovine v cene.json (stran); arhiv hrani vse
 const KEEP_FWD = 2;     // dni naprej
 
 function ljNow() {
@@ -139,6 +166,10 @@ async function fromEuenergy(token, log) {
   } else {
     log.push("jutri že imamo, rezerva ni potrebna");
   }
+
+  // vse znane cene shranimo še v trajni arhiv (cene.json spodaj obrežemo na kratko okno)
+  const vArhiv = arhivDodaj(merged.entries());
+  log.push(`arhiv cen: ${vArhiv} novih vrednosti`);
 
   // pospravi okno
   const lo = ljMidnight(d.getFullYear(), d.getMonth(), d.getDate() - KEEP_BACK) / 1000;

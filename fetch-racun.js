@@ -13,6 +13,33 @@ const USAGE_POINT = process.env.MOJELEKTRO_USAGE_POINT || "383111580019506391"; 
 const RT_ENERGY = "32.0.2.4.1.2.12.0.0.0.0.0.0.0.0.3.72.0";   // prejeta 15-min delovna energija, kWh
 const RT_POWER  = "32.0.2.4.1.2.37.0.0.0.0.0.0.0.0.3.38.0";   // prejeta 15-min delovna moč, kW
 const TZ = "Europe/Ljubljana";
+// ---- TRAJNI ARHIV CEN: mapa arhiv-cen, po ena datoteka na mesec (ljubljanski čas). ----
+// Objavljena borzna cena se ne spreminja, zato jo shranimo enkrat in je nikoli ne brišemo.
+// cene.json (ki ga nalaga stran) ostane kratek; arhiv služi izračunu računov za cele mesece.
+const ARH_DIR = require("path").join(process.cwd(), "arhiv-cen");
+const arhMesec = s => { const d = new Date(new Date(s*1000).toLocaleString("en-US", { timeZone: "Europe/Ljubljana" }));
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; };
+function arhivBeri(k){
+  try { const j = JSON.parse(require("fs").readFileSync(require("path").join(ARH_DIR, k + ".json"), "utf8"));
+        return new Map((j.unix_seconds||[]).map((s,i) => [s, j.price[i]])); } catch (e) { return new Map(); }
+}
+function arhivDodaj(pari){                       // pari: iterable [unix_s, EUR/MWh]
+  const fs = require("fs"), path = require("path"), per = {};
+  for (const [s, p] of pari){ if (p == null || isNaN(p)) continue; const k = arhMesec(s); (per[k] = per[k] || []).push([s, p]); }
+  let novih = 0;
+  Object.keys(per).forEach(k => {
+    const m = arhivBeri(k); let n = 0;
+    per[k].forEach(([s, p]) => { if (!m.has(s)){ m.set(s, p); n++; } });
+    if (!n) return;
+    const ks = [...m.keys()].sort((a, b) => a - b);
+    fs.mkdirSync(ARH_DIR, { recursive: true });
+    fs.writeFileSync(path.join(ARH_DIR, k + ".json"),
+      JSON.stringify({ unix_seconds: ks, price: ks.map(s => m.get(s)), unit: "EUR / MWh", bzn: "SI" }));
+    novih += n;
+  });
+  return novih;
+}
+
 
 // ---- logika blokov, prenesena NESPREMENJENA iz index.html (preverjena na julijski specifikaciji) ----
 const SCHED_2026 = {
@@ -132,13 +159,34 @@ async function mojElektro(readingType, fromMs, toMs, log){
 
 // SIPX za [od, do); GEN-I obračuna URNO = aritmetična sredina štirih četrturnih cen
 async function sipx(fromMs, toMs, log){
-  const r = await getJSON(`https://api.energy-charts.info/price?bzn=SI&start=${iso(fromMs-864e5)}&end=${iso(toMs+864e5)}`);
-  if (r.err){ log.push("SIPX: "+r.err); return new Map(); }
-  const us = r.data.unix_seconds || [], pr = r.data.price || [], acc = new Map();
-  us.forEach((s, i) => { const t = s*1000; if (t < fromMs || t >= toMs || pr[i]==null) return;
-    const h = Math.floor(t/36e5)*36e5; const a = acc.get(h) || [0,0]; a[0]+=pr[i]; a[1]++; acc.set(h,a); });
-  const out = new Map(); acc.forEach((a,h) => out.set(h, a[0]/a[1]/1000));   // EUR/kWh
-  log.push(`SIPX: ${out.size} urnih cen`);
+  // 1) arhiv in cene.json; 2) z energy-charts le tedni, v katerih kakšna pretekla ura nima cene;
+  // 3) prenesene cene takoj v arhiv. Ure brez cene NE smejo šteti kot zastonj (glej izracunaj).
+  const vse = new Map();
+  for (let t = fromMs; t < toMs; t += 20*864e5) arhivBeri(arhMesec(t/1000)).forEach((p, s) => vse.set(s, p));
+  arhivBeri(arhMesec((toMs-1)/1000)).forEach((p, s) => vse.set(s, p));
+  try { const j = JSON.parse(fs.readFileSync(path.join(process.cwd(), "cene.json"), "utf8"));
+        (j.unix_seconds||[]).forEach((s, i) => { if (j.price[i] != null) vse.set(s, j.price[i]); }); } catch (e) {}
+  const urna = () => { const acc = new Map();
+    vse.forEach((p, s) => { const t = s*1000; if (t < fromMs || t >= toMs) return;
+      const h = Math.floor(t/36e5)*36e5; const a = acc.get(h) || [0,0]; a[0]+=p; a[1]++; acc.set(h,a); });
+    const out = new Map(); acc.forEach((a,h) => out.set(h, a[0]/a[1]/1000)); return out; };   // EUR/kWh
+  let out = urna();
+  const doKdaj = Math.min(toMs, Date.now());
+  const tedni = new Set();
+  for (let h = Math.floor(fromMs/36e5)*36e5; h < doKdaj; h += 36e5) if (!out.has(h)) tedni.add(fromMs + Math.floor((h-fromMs)/(7*864e5))*7*864e5);
+  let napake = 0, preneseno = 0;
+  for (const a0 of [...tedni].sort((x,y)=>x-y)){
+    const b0 = Math.min(toMs, a0 + 7*864e5);
+    const r = await getJSON(`https://api.energy-charts.info/price?bzn=SI&start=${iso(a0-864e5)}&end=${iso(b0+864e5)}`);
+    if (r.err){ napake++; log.push(`SIPX ${iso(a0)}: ${r.err}`); continue; }
+    const us = r.data.unix_seconds || [], pr = r.data.price || [];
+    us.forEach((s, i) => { if (pr[i] != null){ vse.set(s, pr[i]); } });
+    preneseno += arhivDodaj(us.map((s, i) => [s, pr[i]]));
+    await new Promise(x => setTimeout(x, 800));
+  }
+  if (tedni.size) out = urna();
+  log.push(`SIPX ${arhMesec(fromMs/1000)}: ${out.size} urnih cen (iz arhiva, dodatno prenesenih ${preneseno}`+
+           `${napake?`, ${napake} neuspelih zahtevkov`:``})`);
   return out;
 }
 
@@ -263,7 +311,8 @@ function izracunaj(y, m, energy15, power15, prices, shift){
   log.push(`podatki za ${yKey}: ${nProbe}/${nExp} četrtur ${popoln ? "- popolni" : "- še niso popolni"}`);
 
   // Če je bil včerajšnji dan že obdelan, novega ni: končamo brez klicev in brez zapisa.
-  if (popoln && store.zadnjiDan === yKey && zd.naVoljo !== zdaj){
+  const nepopolni = Object.values(store.izracuni||{}).some(r => r && (r.manjkaCen > 0));
+  if (popoln && store.zadnjiDan === yKey && zd.naVoljo !== zdaj && !nepopolni){
     log.push("včerajšnji dan je že obdelan, ni sprememb");
     log.forEach(l => console.log("  " + l)); return;
   }
@@ -307,9 +356,18 @@ function izracunaj(y, m, energy15, power15, prices, shift){
   }
   if (shift == null){ shift = 9e5; log.push("oznaka intervala: privzeto KONEC (ni računa za preverjanje)"); }
 
+  let manjkajo = false;
   for (const p of podatki){
     const res = izracunaj(p.y, p.m, p.en, p.pw, p.pr, shift);
     if (!res.stMeritev){ log.push(`${p.key}: v Moj Elektro še ni meritev za ta mesec, preskočeno`); continue; }
+    if (res.manjkaCen > 0){
+      manjkajo = true;
+      const prej = store.izracuni[res.mesec];
+      log.push(`${res.mesec}: za ${res.manjkaCen} ur s porabo ni borzne cene - izračuna NE shranim`+
+               (prej && !prej.manjkaCen ? `, ostane prejšnji (${prej.skupaj} EUR)` : ``)+`; poskusim ob naslednjem zagonu`);
+      if (prej && !prej.manjkaCen) continue;
+      res.nepopolno = true;                 // ni boljšega: shranimo z oznako, stran opozori
+    }
     res.posodobljeno = new Date().toISOString();
     store.izracuni[res.mesec] = res;
     const rac = store.racuni[res.mesec];
@@ -317,7 +375,7 @@ function izracunaj(y, m, energy15, power15, prices, shift){
       (rac ? ` | RAČUN ${rac.skupaj} EUR, razlika ${(res.skupaj-rac.skupaj).toFixed(2)} EUR` : ` (pokrito ${(res.pokrito*100).toFixed(0)} %)`)+
       ` | moč ${JSON.stringify(res.moc)}`);
   }
-  store.zadnjiDan = yKey;
+  if (!manjkajo) store.zadnjiDan = yKey;      // ob manjkajočih cenah naslednja ura poskusi znova
   store.posodobljeno = new Date().toISOString();
   fs.writeFileSync(OUT, JSON.stringify(store, null, 1));
   log.forEach(l => console.log("  " + l));

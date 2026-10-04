@@ -41,11 +41,12 @@ jobs:
           git config user.name "cene-bot"
           git config user.email "actions@github.com"
           for i in 1 2 3; do
-            if [ -z "$(git status --porcelain cene.json)" ]; then
+            if [ -z "$(git status --porcelain cene.json arhiv-cen)" ]; then
               echo "Ni sprememb."
               exit 0
             fi
-            git add cene.json
+            mkdir -p arhiv-cen
+            git add cene.json arhiv-cen
             git commit -q -m "cene: $(date -u +%Y-%m-%d\ %H:%M) UTC"
             if git push origin HEAD:"$BR"; then
               echo "Shranjeno."

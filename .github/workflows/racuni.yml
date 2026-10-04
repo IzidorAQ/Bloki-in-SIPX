@@ -35,8 +35,9 @@ jobs:
           git config user.name "racuni-bot"
           git config user.email "actions@github.com"
           for i in 1 2 3; do
-            if [ -z "$(git status --porcelain racuni.json)" ]; then echo "Ni sprememb."; exit 0; fi
-            git add racuni.json
+            if [ -z "$(git status --porcelain racuni.json arhiv-cen)" ]; then echo "Ni sprememb."; exit 0; fi
+            mkdir -p arhiv-cen
+            git add racuni.json arhiv-cen
             git commit -q -m "racuni: $(date -u +%Y-%m-%d\ %H:%M) UTC"
             if git push origin HEAD:"$BR"; then echo "Shranjeno."; exit 0; fi
             echo "Potisk zavrnjen (poskus $i). Poravnavam z daljavo in računam znova."

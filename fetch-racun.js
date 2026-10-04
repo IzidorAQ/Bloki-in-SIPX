@@ -232,8 +232,11 @@ function izracunaj(y, m, energy15, power15, prices, shift){
   // Dobavitelj meritve distributerja preračuna na celo število kWh z računa (npr. 495,25 -> 495)
   // in šele nato obračuna po urah. Potrjeno na julijski specifikaciji.
   const scale = kwh > 0 ? Math.round(kwh) / kwh : 1;
+  // Preglednost: koliko ur s porabo ima veljavno ceno in kakšna je bila borzna cena ob polnjenju.
+  let urSCeno = 0, sumKP = 0, sumK = 0;
   hourKwh.forEach((k, h) => { const p = prices.get(h);
-    if (p == null){ missingPrice++; return; }
+    if (p == null || !isFinite(p)){ missingPrice++; return; }            // tudi neveljavna vrednost = manjka
+    urSCeno++; sumKP += k * p; sumK += k;
     energija += k * scale * (Math.min(p, C.cap) + C.markup); });
   const dni = new Date(y, m+1, 0).getDate();
   const pokrito = Math.max(0, Math.min(1, stMeritev / ((to - from) / 9e5)));
@@ -265,6 +268,8 @@ function izracunaj(y, m, energy15, power15, prices, shift){
     moc:Object.fromEntries(order.map(b=>[b,+P[b].toFixed(2)])), vrh, b1: b1Mult(new Date(y, m, 15)),
     postavke:L, osnova, ddv, skupaj:r2(osnova+ddv), napoved, pokrito:+pokrito.toFixed(3),
     manjkaCen:missingPrice, oznaka:endLabel?"konec":"zacetek", stMeritev,
+    cene:{ ur:urSCeno, urSPorabo:hourKwh.size, povprBorza: sumK>0 ? +(sumKP/sumK*1000).toFixed(1) : null,
+           energijaNaKwh: kwh>0 ? +(L.energija/kwh*100).toFixed(2) : null },
     izmerjenoDo: (() => { const d = ljParts(lastTs - shift); return `${d.getDate()}. ${d.getMonth()+1}.`; })() };
 }
 
@@ -373,7 +378,7 @@ function izracunaj(y, m, energy15, power15, prices, shift){
     const rac = store.racuni[res.mesec];
     log.push(`${res.mesec}: ${res.kwh} kWh, izračun ${res.skupaj} EUR`+
       (rac ? ` | RAČUN ${rac.skupaj} EUR, razlika ${(res.skupaj-rac.skupaj).toFixed(2)} EUR` : ` (pokrito ${(res.pokrito*100).toFixed(0)} %)`)+
-      ` | moč ${JSON.stringify(res.moc)}`);
+      ` | moč ${JSON.stringify(res.moc)} | cene ${res.cene.ur}/${res.cene.urSPorabo} ur, borza ob polnjenju ${res.cene.povprBorza} EUR/MWh, energija ${res.cene.energijaNaKwh} c/kWh`);
   }
   if (!manjkajo) store.zadnjiDan = yKey;      // ob manjkajočih cenah naslednja ura poskusi znova
   store.posodobljeno = new Date().toISOString();

@@ -419,7 +419,7 @@
     </section>
 
     <div style="text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid var(--line)">
-      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-03 21:30</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-bottom:4px">Cene: energy-charts.info &middot; rezerva <a href="https://euenergy.live" style="color:var(--faint)">euenergy.live</a> (CC-BY-4.0) &middot; vreme: Open-Meteo</span><span id="verBadge" style="font-family:var(--mono);font-size:12px;color:var(--faint)">različica 2026-10-04 08:03</span>
     </div>
 
   </div>
@@ -2651,6 +2651,16 @@ const SAMOOSKRBA_KWH = (0.1299+0.01864+0.00013+0.0008+0.00153)*1.22;   // 0,1842
 const SPTE_KW = 0.77562;   // prispevek SPTE in OVE, EUR/kW obračunske moči najnižjega bloka (brez DDV)
 // Podrobnosti o obračunski moči za mesec: moč po blokih, kdaj je bil vrh dosežen, cena in znesek,
 // skupaj s prispevkom SPTE in OVE, ki se obračuna po moči najnižjega bloka.
+// Energija po borzi: koliko je stala, po kateri povprečni borzni ceni ob polnjenju in za koliko ur so bile cene.
+function energijaPodrobno(c){
+  if(!c||!c.cene||!c.postavke) return "";
+  const z=c.cene, f=(v,d)=>v.toFixed(d).replace(".",","), manjka=z.ur<z.urSPorabo;
+  return `<div class="note" style="margin:6px 0${manjka?";color:var(--b2)":""}"><b>Energija:</b> ${f(c.postavke.energija,2)} € za ${f(c.kwh,0)} kWh `+
+    `(${z.energijaNaKwh!=null?f(z.energijaNaKwh,2):"-"} c/kWh brez DDV). Borzna cena ob tvojem polnjenju povprečno `+
+    `${z.povprBorza!=null?f(z.povprBorza,1):"-"} €/MWh. Cene za ${z.ur} od ${z.urSPorabo} ur`+
+    (manjka?`: <b>za ${z.urSPorabo-z.ur} ur cen ni, znesek energije je prenizek.</b>`:`.`)+
+    ` Najmanj možno je 1,20 c/kWh (pribitek dobavitelja), razen ob negativnih cenah.</div>`;
+}
 function mocPodrobno(k, a, c){
   const moc=(c&&c.moc)||(a&&a.moc); if(!moc) return '<div class="note">Za ta mesec podatkov o moči ni.</div>';
   const order=Object.keys(moc).map(Number).sort((x,y)=>x-y);
@@ -2675,7 +2685,7 @@ function mocPodrobno(k, a, c){
   const skupajMes = c ? c.osnova : (a ? a.osnova : null);
   const delez = skupajMes ? Math.round(vse/skupajMes*100) : null;
   const zima = order.includes(1);
-  return `<table class="evtable" style="margin:6px 0"><tr><th>blok</th><th>obr. moč</th><th>vrh dosežen</th><th>EUR/kW</th><th>znesek</th></tr>`+
+  return energijaPodrobno(c)+`<table class="evtable" style="margin:6px 0"><tr><th>blok</th><th>obr. moč</th><th>vrh dosežen</th><th>EUR/kW</th><th>znesek</th></tr>`+
     vrst+`<tr><td colspan="4">prispevek SPTE in OVE<br><span style="color:var(--faint);font-size:11px">${f(moc[najB],1)} kW (blok ${najB}) &times; ${f(SPTE_KW,5)}</span></td>`+
     `<td style="text-align:right">${f(spte)} €</td></tr>`+
     `<tr class="sum"><td colspan="4">vezano na moč, brez DDV<br><span style="color:var(--faint);font-size:11px">z DDV ${f(r2(vse+ddv))} €${delez!=null?`, to je ${delez} % osnove računa`:``}</span></td>`+
@@ -2710,11 +2720,12 @@ async function loadRacuni(){
       // so že všteti v celoti, moč po do zdaj doseženem vrhu). Tak prihranek se spremeni le zaradi
       // dejanskega polnjenja ali novega vrha moči, ne zaradi popravkov napovedi.
       znesek=c.skupaj;
+      if(c.manjkaCen>0) opomba=`<span style="color:var(--b2)">Pozor: za ${c.manjkaCen} ur s porabo ni bilo borzne cene, znesek je prenizek. Opravilo poskusi znova vsako uro.</span> `;
       const doZdaj = c.pokrito < 0.999;
       vir = doZdaj ? `izmerjeno do ${c.izmerjenoDo||Math.round(c.pokrito*100)+" % meseca"}` : "izračun";
       if(doZdaj && c.napoved){
         const pn=c.napoved.kwh*SAMOOSKRBA_KWH - c.napoved.skupaj;
-        opomba=`napoved za cel mesec: ${eur(c.napoved.skupaj)} za ${c.napoved.kwh} kWh, prihranek okoli ${(pn>=0?"+":"")+pn.toFixed(2).replace(".",",")} €`;
+        opomba+=`napoved za cel mesec: ${eur(c.napoved.skupaj)} za ${c.napoved.kwh} kWh, prihranek okoli ${(pn>=0?"+":"")+pn.toFixed(2).replace(".",",")} €`;
       }
     }
     const kwh = a ? a.kwh : (c ? Math.round(c.kwh) : null);

@@ -17,13 +17,13 @@ function arhivBeri(k){
   try { const j = JSON.parse(require("fs").readFileSync(require("path").join(ARH_DIR, k + ".json"), "utf8"));
         return new Map((j.unix_seconds||[]).map((s,i) => [s, j.price[i]])); } catch (e) { return new Map(); }
 }
-function arhivDodaj(pari){                       // pari: iterable [unix_s, EUR/MWh]
+function arhivDodaj(pari, prepisi){              // pari: iterable [unix_s, EUR/MWh]; prepisi: uvožene cene imajo prednost
   const fs = require("fs"), path = require("path"), per = {};
-  for (const [s, p] of pari){ if (p == null || isNaN(p)) continue; const k = arhMesec(s); (per[k] = per[k] || []).push([s, p]); }
+  for (const [s, p] of pari){ if (p == null || !isFinite(p)) continue; const k = arhMesec(s); (per[k] = per[k] || []).push([s, p]); }
   let novih = 0;
   Object.keys(per).forEach(k => {
     const m = arhivBeri(k); let n = 0;
-    per[k].forEach(([s, p]) => { if (!m.has(s)){ m.set(s, p); n++; } });
+    per[k].forEach(([s, p]) => { if (!m.has(s) || (prepisi && m.get(s) !== p)){ m.set(s, p); n++; } });
     if (!n) return;
     const ks = [...m.keys()].sort((a, b) => a - b);
     fs.mkdirSync(ARH_DIR, { recursive: true });
@@ -32,6 +32,37 @@ function arhivDodaj(pari){                       // pari: iterable [unix_s, EUR/
     novih += n;
   });
   return novih;
+}
+
+// ---- UVOZ CSV z energy-charts.info (izvoz "Electricity production and spot prices") ----
+// Datoteke naložiš v mapo uvoz-cen v repozitoriju. Poiščemo vrstico z glavo "Date ..." in stolpec
+// "Day Ahead Auction"; časovne značke imajo zapisan zamik (+02:00 / +01:00), zato je čas nedvoumen.
+const UVOZ_DIR = require("path").join(process.cwd(), "uvoz-cen");
+function csvVrstica(l){                           // razdeli vrstico CSV, upošteva narekovaje
+  const out = []; let cur = "", q = false;
+  for (let i = 0; i < l.length; i++){ const c = l[i];
+    if (q){ if (c === '"'){ if (l[i+1] === '"'){ cur += '"'; i++; } else q = false; } else cur += c; }
+    else if (c === '"') q = true; else if (c === ","){ out.push(cur); cur = ""; } else cur += c; }
+  out.push(cur); return out.map(x => x.trim());
+}
+function uvozCsv(log){
+  const fs = require("fs"), path = require("path"), pari = [];
+  let imena = []; try { imena = fs.readdirSync(UVOZ_DIR).filter(f => /\.csv$/i.test(f)).sort(); } catch (e) { return pari; }
+  imena.forEach(f => {
+    const vr = fs.readFileSync(path.join(UVOZ_DIR, f), "utf8").replace(/^\uFEFF/, "").split(/\r?\n/).map(csvVrstica);
+    const hi = vr.findIndex(r => r[0] && /^Date/i.test(r[0]));
+    const ci = hi < 0 ? -1 : vr[hi].findIndex(h => /Day Ahead Auction/i.test(h));
+    if (hi < 0 || ci < 0){ log.push(`uvoz ${f}: ni glave "Date" ali stolpca "Day Ahead Auction", preskočeno`); return; }
+    let n = 0;
+    for (let i = hi + 1; i < vr.length; i++){
+      const r = vr[i]; if (!r[0] || !/^\d{4}-\d{2}-\d{2}T/.test(r[0]) || r[ci] == null || r[ci] === "") continue;
+      const t = Date.parse(r[0]), p = parseFloat(r[ci]);
+      if (isNaN(t) || !isFinite(p)) continue;
+      pari.push([Math.floor(t/1000), p]); n++;
+    }
+    log.push(`uvoz ${f}: ${n} cen`);
+  });
+  return pari;
 }
 
 const KEEP_BACK = 10;   // dni zgodovine v cene.json (stran); arhiv hrani vse
@@ -167,8 +198,11 @@ async function fromEuenergy(token, log) {
     log.push("jutri že imamo, rezerva ni potrebna");
   }
 
+  // uvožene cene (CSV v mapi uvoz-cen) imajo prednost pred vsem ostalim
+  const uvoz = uvozCsv(log);
+  uvoz.forEach(([s, p]) => merged.set(s, p));
   // vse znane cene shranimo še v trajni arhiv (cene.json spodaj obrežemo na kratko okno)
-  const vArhiv = arhivDodaj(merged.entries());
+  const vArhiv = arhivDodaj(merged.entries()) + arhivDodaj(uvoz, true);
   log.push(`arhiv cen: ${vArhiv} novih vrednosti`);
 
   // pospravi okno

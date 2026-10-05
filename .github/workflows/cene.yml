@@ -11,6 +11,9 @@ on:
     - cron: "10 18 * * *"
     - cron: "10 5  * * *"   # jutranji poskus, če je čez noč kaj manjkalo
   workflow_dispatch:        # gumb za ročni zagon
+  push:                     # takoj ob nalaganju CSV v mapo uvoz-cen
+    paths:
+      - "uvoz-cen/**"
 
 permissions:
   contents: write

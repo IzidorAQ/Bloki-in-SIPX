@@ -275,7 +275,7 @@
    },
    "izmerjenoDo": "30. 9.",
    "nepopolno": true,
-   "posodobljeno": "2026-10-05T05:36:15.838Z"
+   "posodobljeno": "2026-10-05T07:05:14.763Z"
   },
   "2026-10": {
    "mesec": "2026-10",
@@ -352,11 +352,11 @@
     "energijaNaKwh": 5.06
    },
    "izmerjenoDo": "4. 10.",
-   "posodobljeno": "2026-10-05T05:36:15.875Z"
+   "posodobljeno": "2026-10-05T07:05:14.789Z"
   }
  },
  "oznakaZamik": 900000,
- "posodobljeno": "2026-10-05T05:36:15.875Z",
+ "posodobljeno": "2026-10-05T07:05:14.789Z",
  "dostopnost": {
   "2026-10-01": {
    "naVoljo": "2026-10-02T15:50:55.865Z"

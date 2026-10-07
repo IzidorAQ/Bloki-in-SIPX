@@ -274,28 +274,28 @@
     "energijaNaKwh": 4.58
    },
    "izmerjenoDo": "30. 9.",
-   "posodobljeno": "2026-10-06T10:18:16.140Z"
+   "posodobljeno": "2026-10-07T08:39:34.779Z"
   },
   "2026-10": {
    "mesec": "2026-10",
-   "kwh": 115.67,
+   "kwh": 130.5,
    "bloki": {
-    "2": 8.71,
-    "3": 76.96,
-    "4": 29.94,
+    "2": 16.39,
+    "3": 84.08,
+    "4": 29.97,
     "5": 0.06
    },
    "moc": {
-    "2": 2.1,
+    "2": 5.5,
     "3": 13.7,
     "4": 18.4,
     "5": 18.4
    },
    "vrh": {
     "2": {
-     "lasten": 2.14,
+     "lasten": 5.51,
      "izvor": 2,
-     "ob": "2. 10. ob 12:45"
+     "ob": "6. 10. ob 12:15"
     },
     "3": {
      "lasten": 13.65,
@@ -315,47 +315,47 @@
    },
    "b1": 0.5,
    "postavke": {
-    "energija": 6.23,
-    "moc2": 2.29,
+    "energija": 7.95,
+    "moc2": 6.01,
     "moc3": 3.96,
     "moc4": 0.45,
     "moc5": 0.05,
-    "ee2": 0.18,
-    "ee3": 1.32,
+    "ee2": 0.32,
+    "ee3": 1.44,
     "ee4": 0.54,
-    "ee5": 0,
+    "ee5": 0.01,
     "opTrga": 0.02,
-    "ucink": 0.09,
-    "spte": 1.63,
-    "tros": 0.18,
+    "ucink": 0.1,
+    "spte": 4.27,
+    "tros": 0.2,
     "nadom": 2.97,
     "eko": -1
    },
-   "osnova": 18.91,
-   "ddv": 4.16,
-   "skupaj": 23.07,
+   "osnova": 27.29,
+   "ddv": 6,
+   "skupaj": 33.29,
    "napoved": {
-    "osnova": 63.49,
-    "ddv": 13.97,
-    "skupaj": 77.46,
-    "kwh": 718
+    "osnova": 71.45,
+    "ddv": 15.72,
+    "skupaj": 87.17,
+    "kwh": 675
    },
-   "pokrito": 0.161,
+   "pokrito": 0.193,
    "manjkaCen": 0,
    "oznaka": "konec",
-   "stMeritev": 480,
+   "stMeritev": 576,
    "cene": {
-    "ur": 120,
-    "urSPorabo": 120,
-    "povprBorza": 42.2,
-    "energijaNaKwh": 5.39
+    "ur": 144,
+    "urSPorabo": 144,
+    "povprBorza": 49.2,
+    "energijaNaKwh": 6.09
    },
-   "izmerjenoDo": "5. 10.",
-   "posodobljeno": "2026-10-06T10:18:16.186Z"
+   "izmerjenoDo": "6. 10.",
+   "posodobljeno": "2026-10-07T08:39:34.860Z"
   }
  },
  "oznakaZamik": 900000,
- "posodobljeno": "2026-10-06T10:18:16.186Z",
+ "posodobljeno": "2026-10-07T08:39:34.860Z",
  "dostopnost": {
   "2026-10-01": {
    "naVoljo": "2026-10-02T15:50:55.865Z"
@@ -382,8 +382,9 @@
   },
   "2026-10-06": {
    "niBilo": "2026-10-07T01:32:17.739Z",
-   "delno": 0
+   "delno": 0,
+   "naVoljo": "2026-10-07T08:39:27.160Z"
   }
  },
- "zadnjiDan": "2026-10-05"
+ "zadnjiDan": "2026-10-06"
 }

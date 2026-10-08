@@ -274,15 +274,15 @@
     "energijaNaKwh": 4.58
    },
    "izmerjenoDo": "30. 9.",
-   "posodobljeno": "2026-10-07T08:39:34.779Z"
+   "posodobljeno": "2026-10-08T08:58:36.578Z"
   },
   "2026-10": {
    "mesec": "2026-10",
-   "kwh": 130.5,
+   "kwh": 134.13,
    "bloki": {
-    "2": 16.39,
-    "3": 84.08,
-    "4": 29.97,
+    "2": 17.89,
+    "3": 86.2,
+    "4": 29.98,
     "5": 0.06
    },
    "moc": {
@@ -315,47 +315,47 @@
    },
    "b1": 0.5,
    "postavke": {
-    "energija": 7.95,
+    "energija": 8.44,
     "moc2": 6.01,
     "moc3": 3.96,
     "moc4": 0.45,
     "moc5": 0.05,
-    "ee2": 0.32,
-    "ee3": 1.44,
+    "ee2": 0.36,
+    "ee3": 1.48,
     "ee4": 0.54,
-    "ee5": 0.01,
+    "ee5": 0,
     "opTrga": 0.02,
-    "ucink": 0.1,
+    "ucink": 0.11,
     "spte": 4.27,
-    "tros": 0.2,
+    "tros": 0.21,
     "nadom": 2.97,
     "eko": -1
    },
-   "osnova": 27.29,
-   "ddv": 6,
-   "skupaj": 33.29,
+   "osnova": 27.87,
+   "ddv": 6.13,
+   "skupaj": 34,
    "napoved": {
-    "osnova": 71.45,
-    "ddv": 15.72,
-    "skupaj": 87.17,
-    "kwh": 675
+    "osnova": 66.2,
+    "ddv": 14.56,
+    "skupaj": 80.76,
+    "kwh": 595
    },
-   "pokrito": 0.193,
+   "pokrito": 0.226,
    "manjkaCen": 0,
    "oznaka": "konec",
-   "stMeritev": 576,
+   "stMeritev": 672,
    "cene": {
-    "ur": 144,
-    "urSPorabo": 144,
-    "povprBorza": 49.2,
-    "energijaNaKwh": 6.09
+    "ur": 168,
+    "urSPorabo": 168,
+    "povprBorza": 51.5,
+    "energijaNaKwh": 6.29
    },
-   "izmerjenoDo": "6. 10.",
-   "posodobljeno": "2026-10-07T08:39:34.860Z"
+   "izmerjenoDo": "7. 10.",
+   "posodobljeno": "2026-10-08T08:58:36.656Z"
   }
  },
  "oznakaZamik": 900000,
- "posodobljeno": "2026-10-07T08:39:34.860Z",
+ "posodobljeno": "2026-10-08T08:58:36.656Z",
  "dostopnost": {
   "2026-10-01": {
    "naVoljo": "2026-10-02T15:50:55.865Z"
@@ -387,8 +387,9 @@
   },
   "2026-10-07": {
    "niBilo": "2026-10-08T01:55:56.766Z",
-   "delno": 0
+   "delno": 0,
+   "naVoljo": "2026-10-08T08:58:27.032Z"
   }
  },
- "zadnjiDan": "2026-10-06"
+ "zadnjiDan": "2026-10-07"
 }

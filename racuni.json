@@ -274,7 +274,7 @@
     "energijaNaKwh": 4.58
    },
    "izmerjenoDo": "30. 9.",
-   "posodobljeno": "2026-10-16T07:10:19.041Z"
+   "posodobljeno": "2026-10-17T04:26:28.727Z"
   },
   "2026-10": {
    "mesec": "2026-10",
@@ -335,27 +335,27 @@
    "ddv": 7.41,
    "skupaj": 41.07,
    "napoved": {
-    "osnova": 50.27,
-    "ddv": 11.06,
-    "skupaj": 61.33,
-    "kwh": 372
+    "osnova": 48.26,
+    "ddv": 10.62,
+    "skupaj": 58.88,
+    "kwh": 349
    },
-   "pokrito": 0.483,
+   "pokrito": 0.515,
    "manjkaCen": 0,
    "oznaka": "konec",
-   "stMeritev": 1440,
+   "stMeritev": 1536,
    "cene": {
-    "ur": 360,
-    "urSPorabo": 360,
+    "ur": 384,
+    "urSPorabo": 384,
     "povprBorza": 54.6,
     "energijaNaKwh": 6.62
    },
-   "izmerjenoDo": "15. 10.",
-   "posodobljeno": "2026-10-16T07:10:19.194Z"
+   "izmerjenoDo": "16. 10.",
+   "posodobljeno": "2026-10-17T04:26:28.944Z"
   }
  },
  "oznakaZamik": 900000,
- "posodobljeno": "2026-10-16T07:10:19.194Z",
+ "posodobljeno": "2026-10-17T04:26:28.944Z",
  "dostopnost": {
   "2026-10-01": {
    "naVoljo": "2026-10-02T15:50:55.865Z"
@@ -432,8 +432,9 @@
   },
   "2026-10-16": {
    "niBilo": "2026-10-16T23:35:58.440Z",
-   "delno": 0
+   "delno": 0,
+   "naVoljo": "2026-10-17T04:26:20.115Z"
   }
  },
- "zadnjiDan": "2026-10-15"
+ "zadnjiDan": "2026-10-16"
 }
